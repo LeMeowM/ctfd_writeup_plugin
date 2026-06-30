@@ -73,3 +73,15 @@ def resolve_challenge_id(challenge_ref: str):
     if len(rows) == 1:
         return rows[0][0]
     return None  # zero or ambiguous matches
+
+
+def static_flag_values(challenge_id) -> list:
+    """Return the static flag strings for a challenge (empty list if none/unknown).
+
+    Confirmed against .ctfd-src/CTFd/models/__init__.py lines 330-346:
+    Flags has challenge_id (Integer FK), type (String(80)), content (Text) —
+    all names match the brief verbatim.
+    """
+    from CTFd.models import Flags
+    rows = Flags.query.filter_by(challenge_id=challenge_id, type="static").all()
+    return [f.content for f in rows if getattr(f, "content", None)]
