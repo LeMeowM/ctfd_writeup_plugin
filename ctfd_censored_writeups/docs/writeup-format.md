@@ -23,7 +23,7 @@ visible: true            # optional, boolean, default true
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `challenge` | string or int | (required) | See resolution rules below |
-| `title` | string | (required) | Empty string if omitted |
+| `title` | string | `""` | Optional; stored as empty string if omitted |
 | `author` | string | `null` | Displayed as attribution |
 | `sort_order` | integer | `0` | Ascending; ties broken by insertion order |
 | `tags` | list or comma-string | `[]` | Both `[web, beginner]` and `"web, beginner"` are accepted |
@@ -73,9 +73,11 @@ And here is the decompiled binary:
 
 The entire `` ```flag `` ... `` ``` `` block is replaced by:
 
+````
 ```
-`〔redacted — solve this challenge to view〕`
+〔redacted — solve this challenge to view〕
 ```
+````
 
 (This is the `PLACEHOLDER_BLOCK` constant, which itself is a fenced code block containing the placeholder text.)
 
@@ -103,7 +105,7 @@ The **source key** is the repo-relative file path (e.g. `web/web101-myapproach.m
 
 ## Complete Example File
 
-```markdown
+````markdown
 ---
 challenge: "Web 101"
 title: "Server-Side Template Injection via the name parameter"
@@ -135,5 +137,4 @@ CTF{s3cr3t_flag_here}
 ## Takeaways
 
 Never pass user input to `render_template_string` without sanitization.
-```
-```
+````

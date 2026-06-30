@@ -100,7 +100,7 @@ WRITEUPS_WEBHOOK_SECRET=<generated-secret>
 
 **Default**: `False`
 
-When set to `True` (or `"1"`, `"yes"`, `"on"`), all authenticated users receive uncensored writeups once the CTF end time has passed. The gate is still enforced during the CTF. This toggle does not affect the admin preview bypass.
+When set to `True` (or `"1"`, `"true"`, `"yes"`, `"on"`), all authenticated users receive uncensored writeups once the CTF end time has passed. The gate is still enforced during the CTF. This toggle does not affect the admin preview bypass.
 
 ```bash
 WRITEUPS_OPEN_AFTER_CTF=true
