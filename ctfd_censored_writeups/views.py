@@ -23,6 +23,12 @@ def _render_body(writeup):
 
 
 def register(blueprint):
+    @blueprint.after_request
+    def _set_cache_control(resp):
+        """Set Cache-Control on every writeups-blueprint response, including 404s."""
+        resp.headers["Cache-Control"] = "private, no-store"
+        return resp
+
     @blueprint.route("/writeups/<int:challenge_id>/<int:writeup_id>")
     @authed_only
     def single(challenge_id, writeup_id):
@@ -36,11 +42,7 @@ def register(blueprint):
         if not admin and not compat.challenge_is_visible(w.challenge_id):
             abort(404)
         html, unlocked = _render_body(w)
-        resp = current_app.make_response(
-            render_template("writeup_single.html", writeup=w, body_html=html, unlocked=unlocked)
-        )
-        resp.headers["Cache-Control"] = "private, no-store"
-        return resp
+        return render_template("writeup_single.html", writeup=w, body_html=html, unlocked=unlocked)
 
     def _visible_for(challenge_id, user=None):
         q = Writeup.query.filter_by(challenge_id=challenge_id, quarantined=False)
@@ -66,11 +68,7 @@ def register(blueprint):
             items = []
         else:
             items = [_entry_meta(w) for w in _visible_for(challenge_id, user)]
-        resp = current_app.make_response(
-            render_template("writeups_list.html", challenge_id=challenge_id, items=items)
-        )
-        resp.headers["Cache-Control"] = "private, no-store"
-        return resp
+        return render_template("writeups_list.html", challenge_id=challenge_id, items=items)
 
     @blueprint.route("/writeups")
     @authed_only
@@ -91,11 +89,7 @@ def register(blueprint):
             challenge_ids = all_ids
         else:
             challenge_ids = [cid for cid in all_ids if compat.challenge_is_visible(cid)]
-        resp = current_app.make_response(
-            render_template("writeups_index.html", challenge_ids=challenge_ids)
-        )
-        resp.headers["Cache-Control"] = "private, no-store"
-        return resp
+        return render_template("writeups_index.html", challenge_ids=challenge_ids)
 
     @blueprint.route("/api/v1/writeups/<int:challenge_id>")
     @authed_only
@@ -106,9 +100,7 @@ def register(blueprint):
             data = []
         else:
             data = [_entry_meta(w) for w in _visible_for(challenge_id, user)]
-        resp = jsonify({"success": True, "data": data})
-        resp.headers["Cache-Control"] = "private, no-store"
-        return resp
+        return jsonify({"success": True, "data": data})
 
     @blueprint.route("/api/v1/writeups/<int:challenge_id>/<int:writeup_id>")
     @authed_only
@@ -123,11 +115,9 @@ def register(blueprint):
         if not admin and not compat.challenge_is_visible(w.challenge_id):
             abort(404)
         html, unlocked = _render_body(w)
-        resp = jsonify({"success": True, "data": {
+        return jsonify({"success": True, "data": {
             "id": w.id, "title": w.title, "unlocked": unlocked, "body": html,
         }})
-        resp.headers["Cache-Control"] = "private, no-store"
-        return resp
 
     @blueprint.route("/writeups/_webhook", methods=["POST"])
     @bypass_csrf_protection

@@ -38,4 +38,14 @@ def test_idor_uses_row_challenge_not_url(app, make_user, make_challenge, make_so
     make_solve(user_id=u.id, challenge_id=b.id)
     client = login_as_user(app, name=u.name, password="pw")
     r = client.get(f"/writeups/{b.id}/{wid}")   # attacker passes solved B's id
+    assert r.status_code == 200                  # route returns 200 (not a stray 404)
     assert b"FLAG{secret}" not in r.data         # still censored: row says A
+
+def test_404_on_writeup_route_carries_cache_control(app, make_user, make_challenge, tmp_path):
+    """abort(404) from a writeup route must still set Cache-Control: private, no-store."""
+    from tests.helpers import login_as_user
+    c = make_challenge(); u = make_user()
+    client = login_as_user(app, name=u.name, password="pw")
+    r = client.get(f"/writeups/{c.id}/99999")   # non-existent writeup id
+    assert r.status_code == 404
+    assert r.headers.get("Cache-Control") == "private, no-store"
