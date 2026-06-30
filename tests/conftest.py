@@ -43,6 +43,14 @@ def app(tmp_path):
     # enable_plugins=True is required so CTFd sets SAFE_MODE=False and calls
     # init_plugins(), which discovers and loads ctfd_censored_writeups.
     app = create_ctfd(enable_plugins=True)
+    # Wire top-level alias so tests can do: from ctfd_censored_writeups.models import ...
+    # without triggering a second SQLAlchemy table registration.
+    import sys as _sys
+    _plugin_prefix = "CTFd.plugins.ctfd_censored_writeups"
+    for _full_name in list(_sys.modules):
+        if _full_name == _plugin_prefix or _full_name.startswith(_plugin_prefix + "."):
+            _alias = "ctfd_censored_writeups" + _full_name[len(_plugin_prefix):]
+            _sys.modules.setdefault(_alias, _sys.modules[_full_name])
     yield app
     destroy_ctfd(app)
     for k, v in old.items():
