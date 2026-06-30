@@ -20,7 +20,7 @@ def test_list_shows_metadata_not_body(app, make_user, make_challenge, tmp_path):
     client = login_as_user(app, name=u.name, password="pw")
     r = client.get(f"/writeups/{c.id}")
     assert r.status_code == 200
-    assert b"T" in r.data                 # title present
+    assert b">T</a>" in r.data             # title rendered as link text
     assert b"FLAG{secret}" not in r.data  # no body content
 
 
@@ -30,8 +30,7 @@ def test_api_single_unsolved_is_censored(app, make_user, make_challenge, tmp_pat
     wid = _seed(app, tmp_path, c.id)
     client = login_as_user(app, name=u.name, password="pw")
     r = client.get(f"/api/v1/writeups/{c.id}/{wid}")
-    data = r.get_json()
-    assert "FLAG{secret}" not in data["body"]
+    assert "FLAG{secret}" not in r.get_json()["data"]["body"]
     assert r.headers["Cache-Control"] == "private, no-store"
 
 
@@ -42,4 +41,19 @@ def test_api_single_solved_is_uncensored(app, make_user, make_challenge, make_so
     make_solve(user_id=u.id, challenge_id=c.id)
     client = login_as_user(app, name=u.name, password="pw")
     r = client.get(f"/api/v1/writeups/{c.id}/{wid}")
-    assert "FLAG{secret}" in r.get_json()["body"]
+    assert "FLAG{secret}" in r.get_json()["data"]["body"]
+
+
+def test_api_list_no_body(app, make_user, make_challenge, tmp_path):
+    from tests.helpers import login_as_user
+    c = make_challenge(); u = make_user()
+    _seed(app, tmp_path, c.id)
+    client = login_as_user(app, name=u.name, password="pw")
+    r = client.get(f"/api/v1/writeups/{c.id}")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["success"] is True
+    assert isinstance(body["data"], list)
+    for entry in body["data"]:
+        assert "body" not in entry
+    assert b"FLAG{secret}" not in r.data

@@ -73,8 +73,8 @@ def register(blueprint):
         if w is None or w.quarantined or not w.visible:
             abort(404)
         html, unlocked = _render_body(w)
-        resp = jsonify({
+        resp = jsonify({"success": True, "data": {
             "id": w.id, "title": w.title, "unlocked": unlocked, "body": html,
-        })
+        }})
         resp.headers["Cache-Control"] = "private, no-store"
         return resp
