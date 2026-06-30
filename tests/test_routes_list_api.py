@@ -3,6 +3,33 @@ import pathlib
 DOC = "---\nchallenge: {c}\ntitle: T\n---\nintro <!--redact-->FLAG{{secret}}<!--/redact--> outro\n"
 
 
+def test_assets_served(app):
+    client = app.test_client()
+    r = client.get("/plugins/ctfd_censored_writeups/assets/writeups.js")
+    assert r.status_code == 200
+
+
+def test_nav_link_registered(app):
+    # In CTFd 3.7.6, the accessor is get_user_page_menu_bar in CTFd.plugins,
+    # NOT get_registered_user_page_menu_bar in CTFd.utils.plugins (which does not exist).
+    # get_user_page_menu_bar() calls url_for() which needs a request context for non-http
+    # routes, so we inspect app.plugin_menu_bar directly (raw Menu namedtuples, .route is the
+    # registered route string).
+    with app.app_context():
+        hrefs = [m.route for m in app.plugin_menu_bar]
+    assert any("/writeups" in (h or "") for h in hrefs)
+
+
+def test_writeups_index(app, make_user, make_challenge, tmp_path):
+    from tests.helpers import login_as_user
+    u = make_user()
+    client = login_as_user(app, name=u.name, password="pw")
+    r = client.get("/writeups")
+    assert r.status_code == 200
+    # Index page must not contain any writeup body content (it lists challenges only)
+    assert b"FLAG{secret}" not in r.data
+
+
 def _seed(app, tmp_path, challenge_id):
     from ctfd_censored_writeups.sync import sync_from_dir
     repo = tmp_path / "repo"; (repo).mkdir(exist_ok=True)

@@ -59,6 +59,24 @@ def register(blueprint):
         resp.headers["Cache-Control"] = "private, no-store"
         return resp
 
+    @blueprint.route("/writeups")
+    @authed_only
+    def index():
+        """List all challenges that have at least one visible, non-quarantined writeup."""
+        from .models import db
+        from sqlalchemy import distinct
+        challenge_ids = [
+            row[0]
+            for row in db.session.query(distinct(Writeup.challenge_id))
+            .filter(Writeup.visible == True, Writeup.quarantined == False)  # noqa: E712
+            .all()
+        ]
+        resp = current_app.make_response(
+            render_template("writeups_index.html", challenge_ids=challenge_ids)
+        )
+        resp.headers["Cache-Control"] = "private, no-store"
+        return resp
+
     @blueprint.route("/api/v1/writeups/<int:challenge_id>")
     @authed_only
     def api_list(challenge_id):

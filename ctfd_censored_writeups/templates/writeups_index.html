@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Writeups</title>
+</head>
+<body>
+<div class="container">
+  <h2>Writeups</h2>
+  {% if not challenge_ids %}<p>No writeups available yet.</p>{% endif %}
+  <ul class="list-group">
+    {% for cid in challenge_ids %}
+    <li class="list-group-item">
+      <a href="/writeups/{{ cid }}">Challenge #{{ cid }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+</body>
+</html>

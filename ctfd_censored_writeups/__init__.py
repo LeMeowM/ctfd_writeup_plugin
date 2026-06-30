@@ -20,5 +20,9 @@ def load(app):
     views.register(blueprint)
     app.register_blueprint(blueprint)
 
+    from CTFd.plugins import register_plugin_assets_directory, register_user_page_menu_bar
+    register_plugin_assets_directory(app, base_path="/plugins/ctfd_censored_writeups/assets/")
+    register_user_page_menu_bar("Writeups", "/writeups")
+
     from . import cli
     cli.register(app)

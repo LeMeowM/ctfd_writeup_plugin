@@ -4,24 +4,34 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Writeups</title>
+  <link rel="stylesheet" href="/plugins/ctfd_censored_writeups/assets/writeups.css">
 </head>
 <body>
 <div class="container">
   <h2>Writeups</h2>
-  {% if not items %}<p>No writeups for this challenge yet.</p>{% endif %}
-  <ul class="list-group">
-    {% for it in items %}
-    <li class="list-group-item d-flex justify-content-between">
-      <a href="/writeups/{{ it.challenge_id }}/{{ it.id }}">{{ it.title }}</a>
-      <span>
-        {% if it.author %}<small class="text-muted">{{ it.author }}</small>{% endif %}
-        <span class="badge {{ 'badge-success' if it.unlocked else 'badge-secondary' }}">
-          {{ 'Unlocked' if it.unlocked else 'Censored' }}
+  <!-- JS-powered two-pane reader -->
+  <div id="wu-root" data-challenge-id="{{ challenge_id }}" class="wu-wrap">
+    <div id="wu-index" class="wu-index"></div>
+    <div id="wu-read" class="wu-read"></div>
+  </div>
+  <!-- Server-rendered fallback (no-JS) -->
+  <noscript>
+    {% if not items %}<p>No writeups for this challenge yet.</p>{% endif %}
+    <ul class="list-group">
+      {% for it in items %}
+      <li class="list-group-item d-flex justify-content-between">
+        <a href="/writeups/{{ it.challenge_id }}/{{ it.id }}">{{ it.title }}</a>
+        <span>
+          {% if it.author %}<small class="text-muted">{{ it.author }}</small>{% endif %}
+          <span class="badge {{ 'badge-success' if it.unlocked else 'badge-secondary' }} wu-badge">
+            {{ 'Unlocked' if it.unlocked else 'Censored' }}
+          </span>
         </span>
-      </span>
-    </li>
-    {% endfor %}
-  </ul>
+      </li>
+      {% endfor %}
+    </ul>
+  </noscript>
 </div>
+<script src="/plugins/ctfd_censored_writeups/assets/writeups.js"></script>
 </body>
 </html>

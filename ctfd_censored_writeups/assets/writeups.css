@@ -1,0 +1,4 @@
+.wu-wrap { display: flex; gap: 1rem; }
+.wu-index { width: 16rem; border-right: 1px solid #ddd; }
+.wu-read { flex: 1; }
+.wu-badge { font-size: 0.75rem; }
