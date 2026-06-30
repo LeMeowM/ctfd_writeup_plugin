@@ -1,9 +1,12 @@
-from flask import render_template, abort, jsonify
-from CTFd.utils.decorators import authed_only
+import hashlib
+import hmac
+
+from flask import abort, current_app, jsonify, render_template, request
+from CTFd.plugins import bypass_csrf_protection
+from CTFd.utils.decorators import admins_only, authed_only
 from CTFd.utils import markdown
 from .models import Writeup, WriteupUncensored
 from . import compat, gate
-from flask import current_app
 
 
 def _render_body(writeup):
@@ -96,3 +99,56 @@ def register(blueprint):
         }})
         resp.headers["Cache-Control"] = "private, no-store"
         return resp
+
+    @blueprint.route("/writeups/_webhook", methods=["POST"])
+    @bypass_csrf_protection
+    def webhook():
+        """HMAC-verified webhook: pull + sync on push events from the git host."""
+        from .config import get as cfg_get
+        from .sync import sync_from_dir
+        from .cli import _git_pull_if_present
+
+        secret = cfg_get(current_app, "WRITEUPS_WEBHOOK_SECRET")
+        if not secret:
+            abort(503)
+        sent = request.headers.get("X-Hub-Signature-256", "")
+        expected = "sha256=" + hmac.new(
+            secret.encode(), request.get_data(), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(sent, expected):
+            abort(401)
+        repo_path = cfg_get(current_app, "WRITEUPS_REPO_PATH")
+        _git_pull_if_present(repo_path)
+        report = sync_from_dir(current_app, repo_path)
+        return {
+            "success": True,
+            "created": report.created,
+            "updated": report.updated,
+            "deleted": report.deleted,
+            "quarantined": report.quarantined,
+        }
+
+    @blueprint.route("/admin/writeups", methods=["GET"])
+    @admins_only
+    def admin_page():
+        total = Writeup.query.count()
+        quarantined = Writeup.query.filter_by(quarantined=True).count()
+        return render_template("admin_writeups.html", total=total, quarantined=quarantined)
+
+    @blueprint.route("/admin/writeups/sync", methods=["POST"])
+    @admins_only
+    def admin_sync():
+        from .config import get as cfg_get
+        from .sync import sync_from_dir
+        from .cli import _git_pull_if_present
+
+        repo_path = cfg_get(current_app, "WRITEUPS_REPO_PATH")
+        _git_pull_if_present(repo_path)
+        report = sync_from_dir(current_app, repo_path)
+        return {
+            "success": True,
+            "created": report.created,
+            "updated": report.updated,
+            "deleted": report.deleted,
+            "quarantined": report.quarantined,
+        }
