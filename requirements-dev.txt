@@ -1,0 +1,3 @@
+-r requirements.txt
+CTFd==3.7.6
+pytest>=8.0
