@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ writeup.title }} — Writeup</title>
+</head>
+<body>
+<div class="container writeup-single">
+  <h2>{{ writeup.title }}</h2>
+  {% if writeup.author %}<p class="text-muted">by {{ writeup.author }}</p>{% endif %}
+  <span class="badge {{ 'badge-success' if unlocked else 'badge-secondary' }}">
+    {{ 'Unlocked' if unlocked else 'Censored — solve to unlock' }}
+  </span>
+  <hr>
+  <div class="writeup-body">{{ body_html | safe }}</div>
+</div>
+</body>
+</html>
