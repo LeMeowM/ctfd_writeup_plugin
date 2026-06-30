@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Writeups</title>
+</head>
+<body>
+<div class="container">
+  <h2>Writeups</h2>
+  {% if not items %}<p>No writeups for this challenge yet.</p>{% endif %}
+  <ul class="list-group">
+    {% for it in items %}
+    <li class="list-group-item d-flex justify-content-between">
+      <a href="/writeups/{{ it.challenge_id }}/{{ it.id }}">{{ it.title }}</a>
+      <span>
+        {% if it.author %}<small class="text-muted">{{ it.author }}</small>{% endif %}
+        <span class="badge {{ 'badge-success' if it.unlocked else 'badge-secondary' }}">
+          {{ 'Unlocked' if it.unlocked else 'Censored' }}
+        </span>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+</body>
+</html>
