@@ -35,7 +35,8 @@ def sync_from_dir(app, repo_path: str) -> SyncReport:
     seen = set()
 
     for source_key, full in _iter_markdown(repo_path):
-        seen.add(source_key)
+        seen.add(source_key)  # outside savepoint: a crashing file must not lose its existing row
+        sp = db.session.begin_nested()
         try:
             text = open(full, encoding="utf-8").read()
             parsed = parse_writeup_file(text, source_key)
@@ -47,12 +48,12 @@ def sync_from_dir(app, repo_path: str) -> SyncReport:
             # NOTE: dynamic/regex flags are NOT detected; only static flag content
             # strings that appear as a literal substring are caught here.
             flag_leaked = False
-            if challenge_id is not None:
+            if challenge_id is not None and parsed.ok and parsed.censored_body:
                 for flag_val in compat.static_flag_values(challenge_id):
                     if flag_val and flag_val in parsed.censored_body:
                         flag_leaked = True
                         report.errors.append(
-                            f"{source_key}: censored body contains static flag '{flag_val}'"
+                            f"{source_key}: censored body contains the challenge's static flag (redacted)"
                         )
                         break
 
@@ -97,9 +98,12 @@ def sync_from_dir(app, repo_path: str) -> SyncReport:
             elif changed:
                 report.updated += 1
 
+            sp.commit()
         except Exception as e:
             # Per-file safety net: one malformed file must not abort the whole sync.
-            # E.g. parse_writeup_file raises ValueError for sort_order: not_a_number.
+            # Roll back this file's partial work so we don't persist a Writeup
+            # without its matching WriteupUncensored (cross-bind inconsistency).
+            sp.rollback()
             report.errors.append(f"{source_key}: {e}")
 
     # Deletion pass: rows whose file no longer exists are removed from both binds.
