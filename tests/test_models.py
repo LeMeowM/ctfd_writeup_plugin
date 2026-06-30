@@ -24,3 +24,4 @@ def test_source_key_unique(app):
         import pytest, sqlalchemy
         with pytest.raises(sqlalchemy.exc.IntegrityError):
             app.db.session.commit()
+        app.db.session.rollback()

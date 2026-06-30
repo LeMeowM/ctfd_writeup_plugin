@@ -58,6 +58,9 @@ def app(tmp_path):
             os.environ.pop(k, None)
         else:
             os.environ[k] = v
+    import sys as _sys
+    for _k in [k for k in list(_sys.modules) if k == "ctfd_censored_writeups" or k.startswith("ctfd_censored_writeups.")]:
+        _sys.modules.pop(_k, None)
 
 
 def _eager_load(obj, *attrs):
