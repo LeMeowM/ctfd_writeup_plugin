@@ -73,6 +73,37 @@ Commit: `5e1e660 fix: per-file savepoint isolation + leak-safe flag-scan guards`
 - Modified: `ctfd_censored_writeups/sync.py`
 - Modified: `tests/test_sync.py` (new test + updated flag-leak assertion)
 
+## Fix Wave 2 (2026-06-30)
+
+### Injection point changed — `WriteupUncensored.__init__` (post-flush)
+
+The previous `test_midfile_exception_rolls_back_and_continues` injected its failure at `compat.static_flag_values`, which runs PRE-mutation (before `db.session.flush()`). Because no DB write had occurred yet, the savepoint had no partial work to roll back and the test passed trivially — it would have passed even without the savepoint.
+
+The new version monkeypatches `models_mod.WriteupUncensored.__init__` to raise `RuntimeError("boom after flush")` on its first construction only, then delegates to the real `__init__` for subsequent calls. This fires at `sync.py` line 88 (`u = WriteupUncensored(writeup_id=w.id)`) — AFTER `db.session.flush()` at line 84 has assigned `w.id` and written the Writeup row inside the savepoint. This is the exact post-flush, pre-WriteupUncensored window that creates a cross-bind orphan if the savepoint rollback is absent.
+
+### Evidence
+
+**With savepoint (`sp.rollback()` present — normal production code):**
+```
+.venv/bin/pytest tests/test_sync.py -v   → 7 passed
+.venv/bin/pytest -q                       → 38 passed
+```
+
+**Without savepoint (`sp.rollback()` commented out — temporary ablation):**
+```
+.venv/bin/pytest tests/test_sync.py::test_midfile_exception_rolls_back_and_continues -v
+→ FAILED — AssertionError: assert 2 == 1
+```
+The orphaned Writeup (flushed but never matched with a WriteupUncensored) survived the outer commit, raising `Writeup.query.count()` to 2 instead of 1.
+
+### sync.py unchanged
+
+`git diff ctfd_censored_writeups/sync.py` is empty. sync.py was restored exactly after the ablation run. `git status` shows only `tests/test_sync.py` modified.
+
+### Commit
+
+`test: inject post-flush failure to genuinely cover savepoint isolation`
+
 ## Concerns / Notes
 - The `SAWarning: Flushing object <Flags ...> with incompatible polymorphic identity 'static'` on `test_flag_in_censored_is_quarantined` is a CTFd 3.7.6 / SQLAlchemy 1.x warning from `gen_flag` itself (not from our code); it does not affect test correctness.
 - `gen_flag` is imported directly in `test_sync.py` from `tests.helpers` (conftest.py sets up the path so this resolves to `.ctfd-src/tests/helpers.py`). `gen_flag` was not in conftest.py's import list but is available.
