@@ -1,4 +1,3 @@
-import types
 import ctfd_censored_writeups.gate as gate
 
 class FakeUser:
@@ -38,3 +37,26 @@ def test_post_ctf_open_toggle_uncensors_all(monkeypatch):
 def test_post_ctf_default_keeps_gate(monkeypatch):
     _patch(monkeypatch, solved=False, ended=True, open_after=False)
     assert gate.decide(None, FakeUser(), 1) == gate.CENSORED
+
+
+class _FakeApp:
+    def __init__(self, val):
+        self.config = {"WRITEUPS_OPEN_AFTER_CTF": val}
+
+
+def test_open_after_ctf_bool_true():
+    assert gate._open_after_ctf(_FakeApp(True)) is True
+
+
+def test_open_after_ctf_bool_false():
+    assert gate._open_after_ctf(_FakeApp(False)) is False
+
+
+def test_open_after_ctf_string_truthy():
+    for v in ("true", "True", "1", "yes", "on", "ON"):
+        assert gate._open_after_ctf(_FakeApp(v)) is True, v
+
+
+def test_open_after_ctf_string_garbage_keeps_gate():
+    for v in ("garbage", "false", "0", "no", "off"):
+        assert gate._open_after_ctf(_FakeApp(v)) is False, v
