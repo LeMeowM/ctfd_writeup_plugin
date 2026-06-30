@@ -7,6 +7,14 @@ import pytest
 # the repo into the installed CTFd's plugins directory.
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
+# Make the repo root importable so pure-Python modules (e.g. redaction) can be
+# imported standalone as `ctfd_censored_writeups.<mod>` at collection time,
+# without the CTFd app/DB fixtures. Safe because importing the package only
+# pulls in flask + config (no SQLAlchemy model registration); model tests still
+# import `.models` lazily via the app-fixture alias to avoid double mapping.
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
 def _link_plugin():
     import CTFd
     plugins_dir = pathlib.Path(CTFd.__file__).resolve().parent / "plugins"
