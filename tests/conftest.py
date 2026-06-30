@@ -45,7 +45,7 @@ from tests.helpers import create_ctfd, destroy_ctfd, gen_user, gen_team, gen_cha
 
 @pytest.fixture
 def app(tmp_path):
-    old = {k: os.environ.get(k) for k in ("WRITEUPS_UNCENSORED_BIND_URI", "WRITEUPS_REPO_PATH")}
+    old = {k: os.environ.get(k) for k in ("WRITEUPS_UNCENSORED_BIND_URI", "WRITEUPS_REPO_PATH", "WRITEUPS_WEBHOOK_SECRET")}
     os.environ["WRITEUPS_UNCENSORED_BIND_URI"] = f"sqlite:///{tmp_path}/uncensored.db"
     os.environ["WRITEUPS_REPO_PATH"] = str(tmp_path / "repo")
     # Evict any stale repo-root copies of the plugin loaded at collection time

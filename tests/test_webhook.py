@@ -49,3 +49,23 @@ def test_admin_page_requires_admin(app, make_user):
     client = login_as_user(app, name=u.name, password="pw")
     r = client.get("/admin/writeups")
     assert r.status_code in (302, 403)  # non-admin redirected/forbidden
+
+
+def test_webhook_503_when_secret_unset(app):
+    os.environ.pop("WRITEUPS_WEBHOOK_SECRET", None)
+    client = app.test_client()
+    r = client.post(
+        "/writeups/_webhook",
+        data=b"{}",
+        headers={"X-Hub-Signature-256": "sha256=whatever"},
+    )
+    assert r.status_code == 503
+
+
+def test_admin_sync_requires_admin(app, make_user):
+    from tests.helpers import login_as_user
+
+    u = make_user()
+    client = login_as_user(app, name=u.name, password="pw")
+    r = client.post("/admin/writeups/sync")
+    assert r.status_code in (302, 403)
