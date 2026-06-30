@@ -26,8 +26,14 @@ def register(blueprint):
     @blueprint.route("/writeups/<int:challenge_id>/<int:writeup_id>")
     @authed_only
     def single(challenge_id, writeup_id):
+        user = compat.current_user()
+        admin = compat.is_admin(user)
         w = Writeup.query.filter_by(id=writeup_id).first()
-        if w is None or w.quarantined or not w.visible:
+        if w is None or w.quarantined:
+            abort(404)
+        if not admin and not w.visible:
+            abort(404)
+        if not admin and not compat.challenge_is_visible(w.challenge_id):
             abort(404)
         html, unlocked = _render_body(w)
         resp = current_app.make_response(
@@ -36,12 +42,11 @@ def register(blueprint):
         resp.headers["Cache-Control"] = "private, no-store"
         return resp
 
-    def _visible_for(challenge_id):
-        return (
-            Writeup.query.filter_by(challenge_id=challenge_id, visible=True, quarantined=False)
-            .order_by(Writeup.sort_order.asc(), Writeup.id.asc())
-            .all()
-        )
+    def _visible_for(challenge_id, user=None):
+        q = Writeup.query.filter_by(challenge_id=challenge_id, quarantined=False)
+        if not compat.is_admin(user):
+            q = q.filter_by(visible=True)
+        return q.order_by(Writeup.sort_order.asc(), Writeup.id.asc()).all()
 
     def _entry_meta(w):
         user = compat.current_user()
@@ -55,7 +60,12 @@ def register(blueprint):
     @blueprint.route("/writeups/<int:challenge_id>")
     @authed_only
     def listing(challenge_id):
-        items = [_entry_meta(w) for w in _visible_for(challenge_id)]
+        user = compat.current_user()
+        admin = compat.is_admin(user)
+        if not admin and not compat.challenge_is_visible(challenge_id):
+            items = []
+        else:
+            items = [_entry_meta(w) for w in _visible_for(challenge_id, user)]
         resp = current_app.make_response(
             render_template("writeups_list.html", challenge_id=challenge_id, items=items)
         )
@@ -68,12 +78,19 @@ def register(blueprint):
         """List all challenges that have at least one visible, non-quarantined writeup."""
         from .models import db
         from sqlalchemy import distinct
-        challenge_ids = [
-            row[0]
-            for row in db.session.query(distinct(Writeup.challenge_id))
-            .filter(Writeup.visible == True, Writeup.quarantined == False)  # noqa: E712
-            .all()
-        ]
+        user = compat.current_user()
+        admin = compat.is_admin(user)
+        q = db.session.query(distinct(Writeup.challenge_id)).filter(
+            Writeup.quarantined == False  # noqa: E712
+        )
+        if not admin:
+            q = q.filter(Writeup.visible == True)  # noqa: E712
+        all_ids = [row[0] for row in q.all()]
+        # Exclude writeups whose challenge is not visible (admins bypass this gate).
+        if admin:
+            challenge_ids = all_ids
+        else:
+            challenge_ids = [cid for cid in all_ids if compat.challenge_is_visible(cid)]
         resp = current_app.make_response(
             render_template("writeups_index.html", challenge_ids=challenge_ids)
         )
@@ -83,15 +100,27 @@ def register(blueprint):
     @blueprint.route("/api/v1/writeups/<int:challenge_id>")
     @authed_only
     def api_list(challenge_id):
-        resp = jsonify({"success": True, "data": [_entry_meta(w) for w in _visible_for(challenge_id)]})
+        user = compat.current_user()
+        admin = compat.is_admin(user)
+        if not admin and not compat.challenge_is_visible(challenge_id):
+            data = []
+        else:
+            data = [_entry_meta(w) for w in _visible_for(challenge_id, user)]
+        resp = jsonify({"success": True, "data": data})
         resp.headers["Cache-Control"] = "private, no-store"
         return resp
 
     @blueprint.route("/api/v1/writeups/<int:challenge_id>/<int:writeup_id>")
     @authed_only
     def api_single(challenge_id, writeup_id):
+        user = compat.current_user()
+        admin = compat.is_admin(user)
         w = Writeup.query.filter_by(id=writeup_id).first()
-        if w is None or w.quarantined or not w.visible:
+        if w is None or w.quarantined:
+            abort(404)
+        if not admin and not w.visible:
+            abort(404)
+        if not admin and not compat.challenge_is_visible(w.challenge_id):
             abort(404)
         html, unlocked = _render_body(w)
         resp = jsonify({"success": True, "data": {

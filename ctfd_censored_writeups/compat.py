@@ -75,6 +75,21 @@ def resolve_challenge_id(challenge_ref: str):
     return None  # zero or ambiguous matches
 
 
+def challenge_is_visible(challenge_id) -> bool:
+    """Return True iff the challenge exists AND its state is 'visible'.
+
+    Confirmed against .ctfd-src/CTFd/models/__init__.py line 122:
+    Challenges.state is a String(80) column with default "visible";
+    "hidden" is the other canonical value in 3.7.6.
+    """
+    row = (
+        db.session.query(Challenges.state)
+        .filter(Challenges.id == challenge_id)
+        .first()
+    )
+    return row is not None and row[0] == "visible"
+
+
 def static_flag_values(challenge_id) -> list:
     """Return the static flag strings for a challenge (empty list if none/unknown).
 

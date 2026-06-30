@@ -86,7 +86,9 @@ def _eager_load(obj, *attrs):
 
 @pytest.fixture
 def make_admin(app):
-    def _make(name="admin", email="admin@x.io"):
+    # Use a name distinct from the "admin" user that create_ctfd always creates
+    # (password="password") so there is no name collision on login.
+    def _make(name="testadmin", email="testadmin@x.io"):
         with app.app_context():
             u = gen_user(app.db, name=name, email=email, password="pw", type="admin")
             return _eager_load(u, "id", "name", "email", "type")
@@ -113,9 +115,9 @@ def make_team(app):
 
 @pytest.fixture
 def make_challenge(app):
-    def _make(name="chal", value=100):
+    def _make(name="chal", value=100, state="visible"):
         with app.app_context():
-            c = gen_challenge(app.db, name=name, value=value)
+            c = gen_challenge(app.db, name=name, value=value, state=state)
             return _eager_load(c, "id", "name", "value", "category", "type", "state")
     return _make
 
