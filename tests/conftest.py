@@ -17,15 +17,6 @@ def _link_plugin():
 
 _link_plugin()
 
-# ADAPTATION: In CTFd 3.7.6, helpers live at tests/helpers.py under the CTFd
-# project root (not as a CTFd package submodule). The CTFd source root is
-# .ctfd-src/ (added to sys.path via ctfd.pth), but a site-packages `tests`
-# package (from pybluemonday) shadows it. We insert the CTFd source root at
-# the front of sys.path to ensure the right `tests` package is found.
-# Also: gen_user signature is gen_user(db, name, email, password, **kwargs) —
-#   type="admin" is passed via **kwargs, which matches our usage.
-# gen_team signature requires email/password; we rely on defaults.
-# gen_solve signature: gen_solve(db, user_id, team_id=None, challenge_id=None, ...)
 import CTFd as _CTFd
 # ADAPTATION: CTFd 3.7.6 ships helpers as tests/helpers.py under its project
 # root, NOT inside the CTFd package. A site-packages `tests` package (from
@@ -46,6 +37,7 @@ from tests.helpers import create_ctfd, destroy_ctfd, gen_user, gen_team, gen_cha
 
 @pytest.fixture
 def app(tmp_path):
+    old = {k: os.environ.get(k) for k in ("WRITEUPS_UNCENSORED_BIND_URI", "WRITEUPS_REPO_PATH")}
     os.environ["WRITEUPS_UNCENSORED_BIND_URI"] = f"sqlite:///{tmp_path}/uncensored.db"
     os.environ["WRITEUPS_REPO_PATH"] = str(tmp_path / "repo")
     # enable_plugins=True is required so CTFd sets SAFE_MODE=False and calls
@@ -53,6 +45,11 @@ def app(tmp_path):
     app = create_ctfd(enable_plugins=True)
     yield app
     destroy_ctfd(app)
+    for k, v in old.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
 
 
 def _eager_load(obj, *attrs):

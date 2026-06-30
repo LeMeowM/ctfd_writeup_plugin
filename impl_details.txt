@@ -1,0 +1,256 @@
+# CTFd Censored-Writeups Plugin — Implementation Plan
+
+A build spec for a CTFd plugin that serves **censored** writeups (solve script + flag redacted) to players who haven't solved a challenge, and **uncensored** writeups to players who have, with a browsable list when a challenge has multiple writeups.
+
+---
+
+## 0. The one invariant everything else serves
+
+**Uncensored bytes must never leave the server for a request that has not passed the solve check.**
+
+This is the single rule the whole design exists to protect. Every other decision — data model, routing, caching, rendering — is downstream of it. Concretely:
+
+- The gate is enforced **server-side only**. Never send the uncensored body to the browser "hidden" behind CSS/JS. A CTF audience will open dev tools within minutes.
+- For an unsolved challenge, the HTTP response (HTML *and* any JSON/API payload) must contain only censored content. The flag and solve script must be physically absent from the bytes on the wire.
+- The check is re-evaluated on every request that could return uncensored content. Never trust a client-supplied "solved=true" or a cached decision.
+
+If you keep this invariant in view, most of the plan below is just careful plumbing around it.
+
+---
+
+## 1. The "two databases" decision
+
+You said you're picturing two separate databases, one censored and one uncensored. It's worth pinning down *why* before committing, because the framing changes the design.
+
+### What separation actually buys you
+Physical separation does **not** by itself enforce the gate — server-side access control does that. What separation buys is **defense-in-depth**: if the public-facing code path simply has no connection/handle to the uncensored store, then a query bug in that path *cannot* leak secrets, because the data isn't reachable. That's a real benefit, but it's an isolation property, not the access-control mechanism.
+
+### The clean way to do "two databases" in CTFd
+CTFd is Flask + SQLAlchemy. The idiomatic mechanism for multiple databases in one app is **SQLAlchemy binds**, not two separate connections you manage by hand:
+
+- Set a second database URI in `SQLALCHEMY_BINDS` (e.g. `{"uncensored": "sqlite:////secure/uncensored.db"}` or a separate server/credentials).
+- Mark the model(s) that hold sensitive content with `__bind_key__ = "uncensored"`. They then live in the second database; everything else stays in CTFd's main DB.
+
+This gives you genuine physical/credential separation while still being one coherent app.
+
+### The cost of separation
+- **No cross-database foreign keys.** You cannot `FOREIGN KEY` from the uncensored store to CTFd's `challenges` table if they're in different databases. You lose referential integrity and must relate rows by `challenge_id` / `writeup_id` manually, and handle orphans yourself (challenge deleted → dangling writeups).
+- **Two migration/seed paths**, two backup targets, two things to keep consistent.
+- **Synchronization risk**: if censored and uncensored are *independent documents* (see §2), they can drift out of alignment per challenge/per writeup.
+
+### Recommendation
+Decide based on your threat model:
+
+- **Simplest correct design (recommended default):** one store, one `Writeup` row per writeup holding *both* a censored and uncensored field. The gate picks which field to serialize. Correctness rests entirely on the gate, which is small and testable.
+- **Defense-in-depth design:** keep the censored content (safe to serve to anyone) in the main DB, and put the **uncensored bodies in a separate bind** that the unsolved-path code never opens. You get the "two databases" isolation you're imagining, done the supported way. This is the version to build if you want a query bug to be non-fatal.
+
+Either way, prefer treating the **censored version as derived from the uncensored source** rather than two hand-authored documents — see §2.3. It removes the drift and accidental-leak risks that two independent documents create.
+
+---
+
+## 2. Data model
+
+### 2.1 The Writeup entity
+At minimum, per writeup:
+
+- `id` — primary key.
+- `challenge_id` — which CTFd challenge this writeup is for (relate to `Challenges.id`).
+- `title` — for the selector/list UI.
+- `author` / `source` — display attribution (admin-authored, so this is a label, not a CTFd user FK necessarily).
+- `censored_body` — safe-to-serve content.
+- `uncensored_body` — full content (flag + solve script). Lives in the protected store if you went defense-in-depth.
+- `sort_order` — explicit ordering within a challenge's writeup list (don't rely on insertion order).
+- `language` / `tags` (optional) — useful if writeups span approaches/langs.
+- `visible` — admin toggle to publish/unpublish without deleting.
+- `created_at` / `updated_at`.
+
+### 2.2 Relationship to CTFd
+- If both fields live in CTFd's main DB, you *can* define a real relationship to `Challenges`.
+- If uncensored is on a separate bind, relate by `challenge_id` only and enforce integrity in application code.
+- Unlike the reference plugin (`lapchynski/ctfd-writeups`), do **not** model writeups as `Submissions`/`Solves` of a hidden challenge. That trick is elegant for *participant-submitted* writeups with a points incentive, but it's the wrong shape for *admin-authored official* writeups with censoring — you'd be inventing fake submitters and bending the scoring system. A plain table is cleaner.
+
+### 2.3 Censored = authored, or derived?
+Two options, with very different risk profiles:
+
+- **Two independent documents (what you described).** Author writes a full version and a separate censored version. Simple to store, but: (a) they can drift, and (b) the censored one can *accidentally contain the flag or script* if authored carelessly — which silently breaks the whole point. If you go this way, add the leak-scan in §8.
+- **Single source + redaction markers (recommended).** Author writes one document and marks the spans to redact (e.g. a fenced block tagged `spoiler`/`flag`, or `<!--redact-->...<!--/redact-->` markers). The system mechanically produces the censored version by removing/replacing those spans. One source of truth, censoring is auditable, and you can't forget to censor a section you wrote. The uncensored body is the source; the censored body is generated (and can be cached).
+
+Decide this early — it shapes the authoring UI and the storage.
+
+---
+
+## 3. The solve gate
+
+This is the heart of the plugin and the part most sensitive to CTFd version and to user-vs-team mode.
+
+### 3.1 User mode vs team mode
+CTFd runs in one of two modes (`user_mode` config: users or teams). The gate differs:
+
+- **User mode:** the challenge is solved if *this user* has a solve.
+- **Team mode:** the challenge is solved if *anyone on the user's team* has a solve. Any teammate's solve unlocks the uncensored writeup for the whole team.
+
+Do **not** hard-code one mode. The reference plugin assumed teams and dereferenced `user.team` without a `None` guard in its view route — that crashes in user mode. Handle both explicitly.
+
+### 3.2 The check (conceptual, verify against your CTFd version)
+Modern CTFd represents the solving entity as an **account** (a user in user mode, a team in team mode). The robust pattern:
+
+1. Get the current user via `CTFd.utils.user.get_current_user()`.
+2. Resolve the relevant **account id** for the current mode (CTFd exposes account abstractions and mode helpers such as `is_teams_mode()` / the `get_model()` helper; the `Users` model carries an `account_id`). In user mode the account is the user; in team mode it's the team — guard for users with no team.
+3. Query `Solves` for `(account_id, challenge_id)`; existence ⇒ solved.
+
+> ⚠️ **Version caveat.** The exact attribute and helper names (`account_id`, `get_model`, `is_teams_mode`, the `Solves` columns) have shifted across CTFd majors, and the front-end theme stack changed (Jinja-only → Alpine-based core themes). Pin the plugin to the CTFd version you're running, read that version's `CTFd/models` and `CTFd/utils/user`, and confirm the names before relying on them. Treat the snippet patterns in the old reference plugin as *out of date* (it targets CTFd circa late 2020 / Flask 1.1).
+
+### 3.3 Admin bypass
+Admins (`user.type == "admin"`) always get uncensored, regardless of solve state, so authors can preview.
+
+### 3.4 Decorators
+Use CTFd's decorators rather than rolling your own auth:
+
+- `@authed_only` — must be logged in.
+- `@require_verified_emails` — if your event requires it.
+- challenge-visibility check (CTFd has a visibility decorator/util) so writeups respect hidden/locked challenges.
+- **Think carefully about `@during_ctf_time_only`.** You often *want* writeups readable after the CTF ends (that's when people read them). The old plugin gated viewing on CTF time; that may be wrong for you. See §9.
+
+---
+
+## 4. Routes and API design
+
+Keep the gate in one place and route everything through it.
+
+Suggested surface:
+
+- `GET /writeups/<challenge_id>` — the **list/index** for one challenge: titles + metadata of every visible writeup, so the player can pick. Returns the list regardless of solve state (the *list* is not secret; the *content* is), but mark each entry with whether it'll render censored or uncensored for this requester.
+- `GET /writeups/<challenge_id>/<writeup_id>` — render **one** writeup, censored or uncensored per the gate.
+- Optionally a **JSON API** (`/api/.../writeups/...`) backing a client-side browser UI (§5). Same gate, same rule: the JSON for an unsolved challenge contains only censored content.
+- Admin routes (`@admins_only`) for authoring/managing writeups, if you build authoring inside CTFd (§7).
+
+### IDOR / object-reference discipline
+`<writeup_id>` is attacker-controlled. On the single-writeup route:
+
+1. Load the writeup, get its real `challenge_id` **from the row**, not from the URL.
+2. Run the solve check against *that* challenge.
+3. Only then decide censored vs uncensored.
+
+Never let a player pass a `writeup_id` for challenge A and a `challenge_id` for solved challenge B and get A uncensored. The challenge association must come from the stored writeup.
+
+---
+
+## 5. Browsing multiple writeups (front end)
+
+You need a selector/scroller because a challenge can have several writeups.
+
+### Theme coupling — the main trap
+CTFd's front end is tied to whatever theme the running version ships, and that stack has changed across versions. Overriding core theme templates is brittle across upgrades. Two safer options:
+
+- **Self-contained plugin page**: serve your own page (registered via the plugin) with its own minimal CSS/JS, so you depend on the theme as little as possible. Easiest to keep working across CTFd upgrades.
+- **Minimal injection**: add only a nav link / a small mount point into the theme, and render the rich UI yourself.
+
+### The browsing UX
+- An index pane listing writeups for the challenge (title, author, tags, "censored/unlocked" badge).
+- A reading pane showing the selected writeup.
+- Navigation between writeups (prev/next or a sidebar list) — this is the "scroll through and select" you described.
+- Drive it either by server-rendered pages (one request per writeup; simplest, fully server-gated) or by a small client that fetches the JSON API and swaps content (smoother, but the API must enforce the same gate).
+
+### "Uncensor the moment they solve"
+CTFd has no clean server-push to the browser for this. So:
+
+- **Trivial:** uncensored content appears on the *next* page load after solving. Recommended default.
+- **Live in-place:** requires client-side polling of the gate (or re-fetching the writeup) after a submission, then swapping in the uncensored content the server now returns. Extra plumbing; only build it if the UX matters.
+
+---
+
+## 6. Rendering and sanitization
+
+Writeups are rich text (markdown, code blocks, maybe images).
+
+- **Use CTFd's markdown utility** (`CTFd.utils.markdown`) for visual consistency with the rest of the site, but verify whether it permits raw HTML. If it does, **sanitize** — these documents are admin-authored so the XSS risk is lower than user content, but defense-in-depth still applies (and if you ever allow contributor writeups, it's essential). The reference plugin rendered with cmark's SAFE option; that's a reasonable posture.
+- **Code blocks are where the solve script lives.** In the derived-censoring model, the redaction step must strip the *content* of the relevant code block, not just visually hide it. Render the censored body; the script bytes simply aren't there.
+- **Caching rendered HTML:** the censored render is identical for everyone and safe to cache globally. The uncensored render is also identical across all solvers (same content) — so you can cache it keyed by `writeup_id` and only *serve* it after the gate passes. Cache the render, gate the delivery. Don't conflate the two.
+
+---
+
+## 7. Authoring, ingestion, and sync
+
+You said the source of the data is still open ("query some sort of database… not entirely sure how this will be yet"). Decide where writeups come from:
+
+- **Authored inside CTFd**: admin-only forms (create/edit/delete, set censored vs uncensored or the redaction markers, ordering, visibility). Most self-contained.
+- **Populated externally** (e.g. a git repo of writeups, or another service) and the plugin only *reads*: then you need a **seed/sync mechanism** — an import command or job that loads/refreshes rows, and a strategy for updates and deletions. If the external source is the source of truth, treat the CTFd-side tables as a cache and make sync idempotent (keyed by stable ids).
+- If you adopt **derived censoring** (§2.3), ingestion is also where the redaction step runs: take the source document, produce + store the censored version.
+
+Plan the table creation: a plugin's `load(app)` typically calls `app.db.create_all()` to materialize its models on startup. If you use a separate bind, ensure both binds get created/migrated.
+
+---
+
+## 8. Leakage defenses (checklist)
+
+Walk this list explicitly; each item is a way the invariant in §0 can break:
+
+- **Server-side gate, no client-side hiding.** (Re-stated because it's the one that matters most.)
+- **API payloads obey the gate**, not just HTML pages. JSON for unsolved → censored only.
+- **IDOR**: challenge association comes from the stored writeup, solve check re-run per request (§4).
+- **Caching/CDN**: ensure no shared/proxy cache serves an uncensored response to a different user. Set appropriate `Cache-Control` (avoid caching gated responses publicly), and be aware of any caching CTFd or your deployment applies. If you cache rendered uncensored HTML internally, cache it server-side and still gate delivery — never via a cacheable HTTP response keyed only by URL.
+- **Flag-in-censored scan** (critical if using two independent documents): at save/ingest time, scan the *censored* body for the challenge's flag(s) and reject/warn if found. Account for multiple flags and, where applicable, regex/dynamic flags (harder to scan — flag this limitation to authors).
+- **Solve-script remnants**: in derived censoring, verify the redaction actually removed the marked spans before storing the censored body.
+- **Challenge visibility**: don't expose writeups (even censored) for challenges the player isn't allowed to see yet (hidden/locked/not-yet-released).
+- **Error paths**: a 403/404/exception must not include the uncensored content in a stack trace, debug page, or error template. Never run the live instance in Flask debug mode (the reference plugin's `serve.py` does — that's a dev-only launcher).
+- **Logging**: don't log uncensored bodies or flags to files that are less protected than the store itself.
+
+---
+
+## 9. CTF lifecycle and visibility
+
+- **During CTF:** unsolved → censored, solved → uncensored. Standard.
+- **After CTF:** decide policy. Common choices: make everything uncensored once the event ends (writeups become a public learning resource), or keep the gate. This determines whether you use `@during_ctf_time_only` and how the post-event view behaves. Build it as a config toggle rather than hard-coding.
+- **Before CTF / paused:** writeups for unreleased challenges should not be reachable at all.
+
+---
+
+## 10. Version compatibility and maintenance
+
+- **Pin to your CTFd version** and record it. Re-test on every CTFd upgrade.
+- **Avoid deprecated APIs.** The reference plugin uses `Query.get()` / `db.session.query(...).get()`, deprecated in SQLAlchemy 2.0; modern CTFd has moved on. Use current session patterns.
+- **Theme stack moves.** Template/asset conventions changed across CTFd majors (Jinja → Alpine-based core). The more self-contained your front end (§5), the less the plugin breaks on upgrade.
+- **Plugin entry point**: a package with `load(app)`; register assets via `register_plugin_assets_directory`; register your blueprint/routes inside `load`.
+
+---
+
+## 11. Edge cases to handle
+
+- Challenge with **no writeups** (empty state in the list).
+- Challenge **deleted** while writeups exist (orphans — especially across a bind boundary with no FK).
+- **Multiple flags** per challenge; **dynamic/regex** flags vs the censored-content scan.
+- **Team mode**: teammate solves unlocking for the whole team; user with **no team**.
+- **Admin preview** path returns uncensored.
+- **Very long writeups**, embedded images, attachments — decide what's allowed and where attachments live (and whether attachments themselves could leak the flag).
+- **Sort stability** when writeups are added/removed (use explicit `sort_order`).
+- **Unpublished/`visible=false`** writeups hidden from players but visible to admins.
+
+---
+
+## 12. Testing strategy
+
+Build a test matrix and assert the invariant directly:
+
+- **Gate matrix:** {unsolved, solved} × {user mode, team mode} × {player, admin} × {CTF running, CTF ended}. For each cell, assert the correct censored/uncensored outcome.
+- **Leak assertion (the important one):** for every unsolved/non-admin response — HTML *and* JSON — assert the flag string and the solve-script content are **not present in the response bytes**. This is the test that protects §0; run it against the list route, the single-writeup route, the API, and error responses.
+- **IDOR test:** request writeup of challenge A with credentials that solved only challenge B; assert censored.
+- **Censored-content scan test:** if using two-document authoring, assert the save path rejects a censored body containing the flag.
+- **Mode test:** confirm no crash for a user with no team in team mode, and correct behavior in user mode (the bug class the reference plugin had).
+
+---
+
+## 13. Suggested build order
+
+1. Decide §1 (one store vs separate bind) and §2.3 (derived vs dual-document). These gate everything else.
+2. Define the `Writeup` model; get `load(app)` + table creation working on your CTFd version.
+3. Implement the **solve gate** as a single, unit-tested function (mode-aware, admin-aware). Write the leak/matrix tests against it before building UI.
+4. Add the single-writeup route using the gate; verify censored/uncensored render.
+5. Add the list route + browsing UI (self-contained page first; fancy client later).
+6. Add authoring/ingestion (§7) and the censored-content scan (§8).
+7. Layer caching, post-CTF policy, and live-uncensor polling only if needed.
+8. Re-run the full test matrix; review the §8 checklist line by line.
+
+---
+
+### A note on the reference plugin
+`lapchynski/ctfd-writeups` is worth reading for *how a writeup plugin wires into CTFd* (model-as-challenge-subclass, the solve-based gate, nav/page registration), but it solves the opposite problem (participant-submitted writeups + points), has no censoring concept, is team-mode-buggy in user mode, and targets a 2020-era CTFd. Mine it for patterns; don't fork it.

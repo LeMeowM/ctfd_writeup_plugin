@@ -8,6 +8,7 @@ DEFAULTS = {
     "WRITEUPS_UNCENSORED_BIND_URI": "sqlite:////data/uncensored.db",
 }
 
+
 def get(app, key):
     if key in app.config and app.config[key] not in (None, ""):
         return app.config[key]

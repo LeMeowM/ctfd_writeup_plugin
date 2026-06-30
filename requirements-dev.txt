@@ -1,3 +1,4 @@
 -r requirements.txt
-CTFd==3.7.6
+# CTFd from git: requires git + network; local dev env clones to .ctfd-src/ (gitignored) via ctfd.pth
+CTFd @ git+https://github.com/CTFd/CTFd.git@3.7.6
 pytest>=8.0
