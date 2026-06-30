@@ -22,6 +22,8 @@ import sys
 
 import pytest
 
+from ctfd_censored_writeups.redaction import PLACEHOLDER_INLINE
+
 SECRET = "FLAG{do_not_leak}"
 
 # The ```flag fence MUST start at the beginning of a line.
@@ -78,11 +80,27 @@ def test_unsolved_player_never_sees_secret_anywhere(
     wid = _seed(app, tmp_path, c.id)
     client = login_as_user(app, name=u.name, password="pw")
 
+    # HTML single route: verify censored body is served with placeholder present.
+    resp = client.get(f"/writeups/{c.id}/{wid}")
+    _assert_no_secret(resp)
+    assert PLACEHOLDER_INLINE.encode() in resp.data, (
+        "HTML single route must contain redaction placeholder (proving body was served and censored)"
+    )
+
+    # JSON single route: verify censored body is served with placeholder present.
+    resp = client.get(f"/api/v1/writeups/{c.id}/{wid}")
+    _assert_no_secret(resp)
+    body = resp.get_json()["data"]["body"]
+    assert PLACEHOLDER_INLINE in body, (
+        "JSON single route body must contain redaction placeholder (proving content was censored)"
+    )
+
+    # List/index/404 routes carry no writeup body by design, so the secret-absent
+    # assertions are trivially safe (they test absence from headers/metadata only).
+    # The real protection is verified on the single routes above.
     for url in (
         f"/writeups/{c.id}",             # HTML list
-        f"/writeups/{c.id}/{wid}",       # HTML single
         f"/api/v1/writeups/{c.id}",      # JSON list
-        f"/api/v1/writeups/{c.id}/{wid}",# JSON single
         "/writeups",                     # index
         f"/writeups/{c.id}/999999",      # 404 path
     ):
