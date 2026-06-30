@@ -43,3 +43,19 @@ def test_unclosed_fence_fails_closed():
     r = censor("```flag\nleaked secret to end")
     assert "leaked secret" not in r.censored
     assert r.ok is False
+
+def test_flag_fence_with_extra_info_string_fails_closed():
+    # ``flag bash`` (extra language token after flag) must be treated as a
+    # redaction fence, not a plain code block — fail-closed behaviour.
+    src = "before\n```flag bash\nsolve.py\nsecret_content\n```\nafter"
+    r = censor(src)
+    assert "secret_content" not in r.censored
+    assert "solve.py" not in r.censored
+    assert "before" in r.censored and "after" in r.censored
+    assert r.redacted_spans == 1
+    assert r.ok is True  # well-formed (closed) fence
+
+def test_spoiler_fence_with_extra_info_string_stripped():
+    src = "```spoiler python3\nhidden approach\n```"
+    r = censor(src)
+    assert "hidden approach" not in r.censored

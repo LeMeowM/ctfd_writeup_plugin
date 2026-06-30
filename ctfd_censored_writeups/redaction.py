@@ -6,10 +6,12 @@ PLACEHOLDER_BLOCK = "```\n〔redacted — solve this challenge to view〕\n```"
 
 _OPEN = "<!--redact-->"
 _CLOSE = "<!--/redact-->"
-# Fenced block whose info string is exactly `flag` or `spoiler`.
-_FENCE = re.compile(r"^```(?:flag|spoiler)\s*$.*?^```\s*$", re.DOTALL | re.MULTILINE)
-# Bare opener line (no matching close) — used to detect unclosed fences.
-_FENCE_OPEN = re.compile(r"^```(?:flag|spoiler)\s*$", re.MULTILINE)
+# Fenced block whose info string STARTS WITH `flag` or `spoiler` (word boundary:
+# the token must be the first word, optionally followed by more text after a space).
+# This catches ``flag bash``, ``spoiler python3``, etc. — fail-closed.
+_FENCE = re.compile(r"^```(?:flag|spoiler)(?:\s.*)?$.*?^```\s*$", re.DOTALL | re.MULTILINE)
+# Bare opener line — used to detect unclosed fences.
+_FENCE_OPEN = re.compile(r"^```(?:flag|spoiler)(?:\s.*)?$", re.MULTILINE)
 
 
 @dataclass
