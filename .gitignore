@@ -74,3 +74,4 @@ selenium-debug.log
 .DS_Store
 .env
 .ctfd-src/
+.ctfd_secret_key
