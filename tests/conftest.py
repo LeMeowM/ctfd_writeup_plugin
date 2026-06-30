@@ -48,17 +48,23 @@ def app(tmp_path):
     old = {k: os.environ.get(k) for k in ("WRITEUPS_UNCENSORED_BIND_URI", "WRITEUPS_REPO_PATH")}
     os.environ["WRITEUPS_UNCENSORED_BIND_URI"] = f"sqlite:///{tmp_path}/uncensored.db"
     os.environ["WRITEUPS_REPO_PATH"] = str(tmp_path / "repo")
+    # Evict any stale repo-root copies of the plugin loaded at collection time
+    # so CTFd's plugin loader registers a clean copy against its own DB session.
+    import sys as _sys
+    for _k in [k for k in list(_sys.modules)
+               if k == "ctfd_censored_writeups" or k.startswith("ctfd_censored_writeups.")]:
+        _sys.modules.pop(_k, None)
     # enable_plugins=True is required so CTFd sets SAFE_MODE=False and calls
     # init_plugins(), which discovers and loads ctfd_censored_writeups.
     app = create_ctfd(enable_plugins=True)
     # Wire top-level alias so tests can do: from ctfd_censored_writeups.models import ...
     # without triggering a second SQLAlchemy table registration.
-    import sys as _sys
+    # Force-overwrite (not setdefault) so a stale repo-root entry can't win.
     _plugin_prefix = "CTFd.plugins.ctfd_censored_writeups"
     for _full_name in list(_sys.modules):
         if _full_name == _plugin_prefix or _full_name.startswith(_plugin_prefix + "."):
             _alias = "ctfd_censored_writeups" + _full_name[len(_plugin_prefix):]
-            _sys.modules.setdefault(_alias, _sys.modules[_full_name])
+            _sys.modules[_alias] = _sys.modules[_full_name]
     yield app
     destroy_ctfd(app)
     for k, v in old.items():

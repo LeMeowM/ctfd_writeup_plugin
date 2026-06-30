@@ -8,6 +8,8 @@ _OPEN = "<!--redact-->"
 _CLOSE = "<!--/redact-->"
 # Fenced block whose info string is exactly `flag` or `spoiler`.
 _FENCE = re.compile(r"^```(?:flag|spoiler)\s*$.*?^```\s*$", re.DOTALL | re.MULTILINE)
+# Bare opener line (no matching close) — used to detect unclosed fences.
+_FENCE_OPEN = re.compile(r"^```(?:flag|spoiler)\s*$", re.MULTILINE)
 
 
 @dataclass
@@ -28,6 +30,13 @@ def censor(markdown: str) -> CensorResult:
         return PLACEHOLDER_BLOCK
 
     text = _FENCE.sub(_fence_sub, markdown)
+
+    # 1b) Detect any remaining bare opener (unclosed fence) — fail closed.
+    m = _FENCE_OPEN.search(text)
+    if m:
+        text = text[:m.start()] + PLACEHOLDER_BLOCK
+        spans += 1
+        ok = False
 
     # 2) Inline redact spans. Walk manually to fail closed on malformed input.
     out = []
@@ -60,4 +69,6 @@ def censor(markdown: str) -> CensorResult:
 
 
 def verify_no_secret(censored: str) -> bool:
-    return _OPEN not in censored and _CLOSE not in censored and not _FENCE.search(censored)
+    return (_OPEN not in censored and _CLOSE not in censored
+            and not _FENCE.search(censored)
+            and not _FENCE_OPEN.search(censored))

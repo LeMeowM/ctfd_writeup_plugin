@@ -38,3 +38,8 @@ def test_no_markers_is_identity():
     r = censor(src)
     assert r.censored == src
     assert r.redacted_spans == 0 and r.ok
+
+def test_unclosed_fence_fails_closed():
+    r = censor("```flag\nleaked secret to end")
+    assert "leaked secret" not in r.censored
+    assert r.ok is False
