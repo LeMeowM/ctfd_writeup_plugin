@@ -22,12 +22,17 @@ def test_nav_link_registered(app):
 
 def test_writeups_index(app, make_user, make_challenge, tmp_path):
     from tests.helpers import login_as_user
+    c = make_challenge()
+    _seed(app, tmp_path, c.id)
     u = make_user()
     client = login_as_user(app, name=u.name, password="pw")
     r = client.get("/writeups")
     assert r.status_code == 200
-    # Index page must not contain any writeup body content (it lists challenges only)
+    # the index lists the challenge that has writeups...
+    assert f"/writeups/{c.id}".encode() in r.data
+    # ...but never any writeup body content (censored or uncensored)
     assert b"FLAG{secret}" not in r.data
+    assert b"intro" not in r.data
 
 
 def _seed(app, tmp_path, challenge_id):
