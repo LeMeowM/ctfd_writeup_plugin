@@ -75,3 +75,6 @@ selenium-debug.log
 .env
 .ctfd-src/
 .ctfd_secret_key
+
+# Superpowers SDD scratch (task briefs/reports/ledger)
+.superpowers/
