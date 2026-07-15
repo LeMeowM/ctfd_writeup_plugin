@@ -78,3 +78,6 @@ selenium-debug.log
 
 # Superpowers SDD scratch (task briefs/reports/ledger)
 .superpowers/
+
+# Local dev CTFd instance generated data (scripts and sample writeups are tracked)
+.dev/uncensored.db
