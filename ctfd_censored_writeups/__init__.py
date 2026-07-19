@@ -20,6 +20,8 @@ def load(app):
     views.register(blueprint)
     from . import submissions
     submissions.register(blueprint)
+    from . import admin_review
+    admin_review.register(blueprint)
     app.register_blueprint(blueprint)
 
     from CTFd.plugins import (

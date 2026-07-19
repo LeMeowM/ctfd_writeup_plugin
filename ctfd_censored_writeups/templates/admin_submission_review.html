@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review Submission</title>
+</head>
+<body>
+<div class="container">
+  <h2>Review submission #{{ sub.id }}</h2>
+  <p>
+    Challenge: <strong>{{ challenge_name }}</strong> &mdash;
+    author: {{ sub.author }} &mdash; submitter: {{ submitter_name }} &mdash;
+    status: <strong>{{ sub.status }}</strong>
+  </p>
+  <p><a href="/admin/writeups">&larr; back to queue</a></p>
+
+  <ul id="wu-warnings" style="color: #b00;">
+    {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+
+  {% if sub.llm_report %}
+  <h3>LLM pre-review</h3>
+  <pre>{{ sub.llm_report }}</pre>
+  {% endif %}
+
+  {% if sub.status == "approved" %}
+  <p>This submission is published as writeup #{{ sub.writeup_id }}
+     (<a href="/writeups/{{ sub.challenge_id }}/{{ sub.writeup_id }}">view</a>).</p>
+  <form method="POST" action="/admin/writeups/submissions/{{ sub.id }}/reopen">
+    <input type="hidden" name="nonce" value="{{ nonce }}">
+    <button type="submit">Re-open (unpublish)</button>
+  </form>
+  {% else %}
+  <form method="POST" action="/admin/writeups/submissions/{{ sub.id }}/decide">
+    <input type="hidden" name="nonce" value="{{ nonce }}">
+    <input type="hidden" name="updated_at" value="{{ sub.updated_at.isoformat() }}">
+    <div style="display: flex; gap: 1em;">
+      <div style="flex: 1;">
+        <h3>Body (editable &mdash; wrap missed spoilers in redaction markers)</h3>
+        <textarea name="body" id="wu-body" rows="30" style="width: 100%;">{{ body }}</textarea>
+      </div>
+      <div style="flex: 1;">
+        <h3>Censored preview (what a non-solver sees; check images by eye
+            &mdash; they cannot be redacted)</h3>
+        <div id="wu-preview" style="border: 1px solid #ccc; padding: 0.5em;">{{ preview_html | safe }}</div>
+      </div>
+    </div>
+    <p><button type="button" id="wu-repreview">Re-preview</button></p>
+    <p><label>Score (internal): <input type="number" name="score"
+        value="{{ sub.score if sub.score is not none else '' }}"></label></p>
+    <p><label>Comment (required to reject; shown to the submitter):<br>
+        <textarea name="comment" rows="3" cols="70">{{ sub.admin_comment or '' }}</textarea></label></p>
+    <button type="submit" name="action" value="approve">Approve &amp; publish</button>
+    <button type="submit" name="action" value="reject">Reject</button>
+  </form>
+  <script>
+    document.getElementById("wu-repreview").onclick = async () => {
+      const fd = new FormData();
+      fd.append("body", document.getElementById("wu-body").value);
+      const r = await fetch("/admin/writeups/submissions/{{ sub.id }}/preview", {
+        method: "POST",
+        headers: {"CSRF-Token": "{{ nonce }}"},
+        body: fd
+      });
+      const j = await r.json();
+      document.getElementById("wu-preview").innerHTML = j.html;
+      const ul = document.getElementById("wu-warnings");
+      ul.textContent = "";
+      j.warnings.forEach((w) => {
+        const li = document.createElement("li");
+        li.textContent = w;
+        ul.appendChild(li);
+      });
+    };
+  </script>
+  {% endif %}
+</div>
+</body>
+</html>
