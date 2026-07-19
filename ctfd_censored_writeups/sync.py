@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from CTFd.models import db
 from .models import Writeup, WriteupUncensored
 from .parser import parse_writeup_file
-from .publish import censored_body_leaks_flag
+from .publish import censored_body_leaks_flag, SUBMISSION_PREFIX
 from . import compat
 
 
@@ -104,8 +104,12 @@ def sync_from_dir(app, repo_path: str) -> SyncReport:
             sp.rollback()
             report.errors.append(f"{source_key}: {e}")
 
-    # Deletion pass: rows whose file no longer exists are removed from both binds.
+    # Deletion pass: rows whose file no longer exists are removed from both
+    # binds. Rows in the submission:// namespace are owned by the review flow,
+    # not by files on disk — sync must never touch them.
     for w in Writeup.query.all():
+        if w.source_key.startswith(SUBMISSION_PREFIX):
+            continue
         if w.source_key not in seen:
             WriteupUncensored.query.filter_by(writeup_id=w.id).delete()
             db.session.delete(w)

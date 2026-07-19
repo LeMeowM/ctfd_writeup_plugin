@@ -64,3 +64,50 @@ def evaluate(challenge_id: int, body: str) -> Evaluation:
     if censored_body_leaks_flag(challenge_id, parsed.censored_body):
         warnings.append(WARN_FLAG_LEAK)
     return Evaluation(parsed=parsed, warnings=warnings)
+
+
+def publish_submission(sub):
+    """Upsert Writeup + WriteupUncensored for an approved submission.
+
+    Caller must have verified evaluate(...) returned no warnings, and commits.
+    Returns the Writeup row (flushed, id assigned).
+    """
+    from CTFd.models import db
+    from .models import Writeup, WriteupUncensored
+
+    body = sub.body_edited or sub.body_raw
+    key = source_key_for(sub.id)
+    parsed = parse_writeup_file(compose_document(sub.challenge_id, sub.title, sub.author, body), key)
+
+    w = Writeup.query.filter_by(source_key=key).first()
+    if w is None:
+        w = Writeup(source_key=key)
+        db.session.add(w)
+    w.challenge_id = sub.challenge_id
+    w.title = sub.title
+    w.author = sub.author
+    w.censored_body = parsed.censored_body
+    w.sort_order = 0
+    w.tags = None
+    w.language = None
+    w.visible = True
+    w.quarantined = False
+    db.session.flush()  # assign w.id if new
+
+    u = WriteupUncensored.query.filter_by(writeup_id=w.id).first()
+    if u is None:
+        u = WriteupUncensored(writeup_id=w.id)
+        db.session.add(u)
+    u.uncensored_body = parsed.uncensored_body
+    return w
+
+
+def unpublish_submission(sub):
+    """Delete the published rows for a submission, if any. Caller commits."""
+    from CTFd.models import db
+    from .models import Writeup, WriteupUncensored
+
+    w = Writeup.query.filter_by(source_key=source_key_for(sub.id)).first()
+    if w is not None:
+        WriteupUncensored.query.filter_by(writeup_id=w.id).delete()
+        db.session.delete(w)
