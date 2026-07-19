@@ -58,6 +58,7 @@
     document.getElementById("wu-repreview").onclick = async () => {
       const fd = new FormData();
       fd.append("body", document.getElementById("wu-body").value);
+      fd.append("nonce", "{{ nonce }}");
       const r = await fetch("/admin/writeups/submissions/{{ sub.id }}/preview", {
         method: "POST",
         headers: {"CSRF-Token": "{{ nonce }}"},
