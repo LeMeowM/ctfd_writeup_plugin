@@ -6,6 +6,7 @@ DEFAULTS = {
     "WRITEUPS_WEBHOOK_SECRET": "",                  # HMAC secret; empty disables webhook
     "WRITEUPS_OPEN_AFTER_CTF": False,               # post-CTF toggle; default keep gate
     "WRITEUPS_UNCENSORED_BIND_URI": "sqlite:////data/uncensored.db",
+    "WRITEUPS_DISCORD_WEBHOOK_URL": "",             # Discord announcements; empty disables
 }
 
 
