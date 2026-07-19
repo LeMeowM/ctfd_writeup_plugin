@@ -20,8 +20,13 @@ def load(app):
     views.register(blueprint)
     app.register_blueprint(blueprint)
 
-    from CTFd.plugins import register_plugin_assets_directory, register_user_page_menu_bar
+    from CTFd.plugins import (
+        register_plugin_assets_directory,
+        register_plugin_script,
+        register_user_page_menu_bar,
+    )
     register_plugin_assets_directory(app, base_path="/plugins/ctfd_censored_writeups/assets/")
+    register_plugin_script("/plugins/ctfd_censored_writeups/assets/challenge-tab.js")
     register_user_page_menu_bar("Writeups", "/writeups")
 
     from . import cli
