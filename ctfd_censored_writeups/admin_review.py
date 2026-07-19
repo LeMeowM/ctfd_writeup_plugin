@@ -56,3 +56,57 @@ def register(blueprint):
             "html": markdown(ev.parsed.censored_body),
             "warnings": ev.warnings,
         })
+
+    @blueprint.route("/admin/writeups/submissions/<int:sub_id>/decide", methods=["POST"])
+    @admins_only
+    def decide(sub_id):
+        sub = db.session.get(WriteupSubmission, sub_id)
+        if sub is None:
+            abort(404)
+        if sub.status == STATUS_APPROVED:
+            abort(409, description="already approved — re-open first")
+        # Race guard: the submitter may have resubmitted while this page was open.
+        if request.form.get("updated_at") != sub.updated_at.isoformat():
+            abort(409, description="submission changed since the page was loaded — reload")
+
+        action = request.form.get("action")
+        body = request.form.get("body") or ""
+        comment = (request.form.get("comment") or "").strip()
+        score_raw = (request.form.get("score") or "").strip()
+        try:
+            score = int(score_raw) if score_raw else None
+        except ValueError:
+            abort(400)
+
+        # Persist admin edits; body_edited stays None while identical to the original.
+        sub.body_edited = body if body != sub.body_raw else None
+
+        if action == "approve":
+            ev = publish.evaluate(sub.challenge_id, sub.body_edited or sub.body_raw)
+            if ev.warnings:
+                # Blocked, not quarantined: a human is in the loop to fix it.
+                db.session.rollback()
+                return _render_review(sub, body, status_code=400)
+            w = publish.publish_submission(sub)
+            sub.writeup_id = w.id
+            sub.status = STATUS_APPROVED
+        elif action == "reject":
+            if not comment:
+                abort(400, description="a comment is required to reject")
+            sub.status = STATUS_REJECTED
+        else:
+            abort(400)
+
+        admin = compat.current_user()
+        sub.admin_comment = comment or None
+        sub.score = score
+        sub.reviewed_by = admin.id
+        sub.reviewed_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        notify.notify_reviewed(
+            current_app, sub.title,
+            compat.challenge_name(sub.challenge_id) or f"#{sub.challenge_id}",
+            approved=(sub.status == STATUS_APPROVED), score=sub.score,
+        )
+        return redirect("/admin/writeups")
