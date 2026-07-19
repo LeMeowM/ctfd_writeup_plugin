@@ -100,3 +100,33 @@ def static_flag_values(challenge_id) -> list:
     from CTFd.models import Flags
     rows = Flags.query.filter_by(challenge_id=challenge_id, type="static").all()
     return [f.content for f in rows if getattr(f, "content", None)]
+
+
+def solved_challenges(account_id):
+    """(id, name) of challenges solved by the account, name-sorted.
+
+    Same mode-aware column choice as has_solved: Solves.team_id in team mode,
+    Solves.user_id in user mode (Solves.account_id has no SQL expression).
+    """
+    if account_id is None:
+        return []
+    col = Solves.team_id if is_teams_mode() else Solves.user_id
+    rows = (
+        db.session.query(Challenges.id, Challenges.name)
+        .join(Solves, Solves.challenge_id == Challenges.id)
+        .filter(col == account_id)
+        .order_by(Challenges.name.asc())
+        .all()
+    )
+    return [(r[0], r[1]) for r in rows]
+
+
+def challenge_name(challenge_id):
+    row = db.session.query(Challenges.name).filter(Challenges.id == challenge_id).first()
+    return row[0] if row else None
+
+
+def user_name(user_id):
+    from CTFd.models import Users
+    u = db.session.get(Users, user_id)
+    return u.name if u else None
