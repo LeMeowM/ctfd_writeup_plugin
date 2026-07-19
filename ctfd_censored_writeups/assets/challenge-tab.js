@@ -17,9 +17,10 @@
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "nav-link challenge-writeups";
-    // core-beta imports Bootstrap's Tab component, whose delegated data-api
-    // listener on document handles dynamically added [data-bs-toggle="tab"]
-    // buttons — the theme's own tabs use the same machinery (Tab.show()).
+    // core-beta registers Bootstrap Tab's delegated data-api listener on
+    // document, which handles this dynamically injected button. The theme's
+    // own tab buttons instead call Tab.show() via Alpine @click handlers,
+    // but both paths share Tab's active/pane management.
     btn.setAttribute("data-bs-toggle", "tab");
     btn.setAttribute("data-bs-target", "#writeups");
     btn.textContent = "Writeups";
