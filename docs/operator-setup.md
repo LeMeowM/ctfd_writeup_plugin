@@ -132,3 +132,7 @@ Navigate to `/admin/writeups` while logged in as an admin. The page shows:
 - A "Sync now" button that triggers `POST /admin/writeups/sync`.
 
 See [operator-setup.md](operator-setup.md) (this file) and [writeup-format.md](../ctfd_censored_writeups/docs/writeup-format.md) for the full format reference.
+
+## Challenge Modal Writeups Tab
+
+No configuration is required. The plugin injects a "Writeups" tab into the challenge modal via a registered page script (`challenge-tab.js`). This targets the **core-beta** theme's modal markup; on other themes the script silently does nothing and the modal is unchanged. See [how-it-works.md](how-it-works.md#challenge-modal-tab) for the mechanism.

@@ -144,6 +144,16 @@ All routes require authentication (`@authed_only`). All responses carry `Cache-C
 - `GET /writeups/<challenge_id>` — list writeups for a challenge (HTML template).
 - `GET /writeups/<challenge_id>/<writeup_id>` — single writeup page (HTML template).
 
+## Challenge Modal Tab
+
+The plugin adds a "Writeups" tab to the challenge modal on the challenges page, next to the built-in "Challenge" and "N Solves" tabs.
+
+**Mechanism**: `challenge-tab.js` is registered via CTFd's `register_plugin_script()`, so it loads on every page (no theme template is overridden). On the challenges page, the core-beta theme re-renders the modal's inner HTML into `#challenge-window` each time a challenge is opened; the script observes that container with a `MutationObserver` and injects, per render, a Bootstrap tab button (`data-bs-toggle="tab"`) and a pane (`#writeups`).
+
+**Content**: the pane fetches `GET /api/v1/writeups/<challenge_id>` and lists each visible writeup as a link to its `/writeups/<challenge_id>/<writeup_id>` page (opened in a new browser tab), with the author and a lock icon on entries the viewer has not unlocked. The tab label becomes "Writeups (N)". With zero writeups — or if the API call fails — the pane reads "No writeups yet". Titles and authors are rendered with `textContent`, so writeup metadata cannot inject HTML.
+
+**Theme dependency (fail-silent)**: the injection requires the core-beta modal markup (`#challenge-window`, `.nav-tabs`, `.tab-content`, `#challenge-id`). On a theme where any of these is absent, the script does nothing and the modal renders exactly as stock. The solve gate is unaffected either way: the tab only shows metadata the list API already exposes, and the linked pages enforce censoring server-side.
+
 ## Known Limitations
 
 - **`/writeups` index shows "Challenge #N"**: the index template lists challenge IDs without joining the `Challenges` table to show names. A future improvement would add a name-resolution step.

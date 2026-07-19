@@ -13,6 +13,7 @@ This is enforced at the storage layer: the censored and uncensored bodies live i
 - **Writeup source**: Markdown files in a local directory (typically a git checkout). Each file has a YAML frontmatter block specifying which challenge it belongs to, a title, author, and display options.
 - **Redaction**: Authors mark secrets inline with `<!--redact-->…<!--/redact-->` or in fenced `` ```flag `` / `` ```spoiler `` blocks. The plugin strips these on ingest and stores both a censored and an uncensored version.
 - **Solve gate**: `gate.decide(app, user, challenge_id)` returns `"censored"` or `"uncensored"`. Admins always get uncensored (preview). In team mode, any teammate's solve unlocks for the whole team.
+- **Challenge modal tab**: a "Writeups" tab appears in the challenge modal (core-beta theme), listing each writeup with a lock icon until solved. Injected client-side; silently absent on other themes.
 - **Sync**: Push a commit to the writeups repo → git host fires `POST /writeups/_webhook` (HMAC-verified) → plugin pulls and re-syncs. Manual sync also available via the admin page or `flask writeups sync`.
 - **Quarantine**: Files that fail to parse, reference an unknown challenge, or contain a flag in their censored body are stored but never served.
 
