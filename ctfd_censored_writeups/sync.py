@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from CTFd.models import db
 from .models import Writeup, WriteupUncensored
 from .parser import parse_writeup_file
+from .publish import censored_body_leaks_flag
 from . import compat
 
 
@@ -48,14 +49,11 @@ def sync_from_dir(app, repo_path: str) -> SyncReport:
             # NOTE: dynamic/regex flags are NOT detected; only static flag content
             # strings that appear as a literal substring are caught here.
             flag_leaked = False
-            if challenge_id is not None and parsed.ok and parsed.censored_body:
-                for flag_val in compat.static_flag_values(challenge_id):
-                    if flag_val and flag_val in parsed.censored_body:
-                        flag_leaked = True
-                        report.errors.append(
-                            f"{source_key}: censored body contains the challenge's static flag (redacted)"
-                        )
-                        break
+            if parsed.ok and censored_body_leaks_flag(challenge_id, parsed.censored_body):
+                flag_leaked = True
+                report.errors.append(
+                    f"{source_key}: censored body contains the challenge's static flag (redacted)"
+                )
 
             quarantined = (not parsed.ok) or (challenge_id is None) or flag_leaked
 
