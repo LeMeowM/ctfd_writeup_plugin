@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Submit a Writeup</title>
+</head>
+<body>
+<div class="container">
+  <h2>Submit a Writeup</h2>
+  {% if not choices %}
+  <p>You need to solve a challenge before you can submit a writeup for it.</p>
+  {% else %}
+  <form method="POST" action="/writeups/submit">
+    <input type="hidden" name="nonce" value="{{ nonce }}">
+    <p>
+      <label for="wu-challenge">Challenge</label><br>
+      <select name="challenge_id" id="wu-challenge" required>
+        {% for cid, cname in choices %}
+        <option value="{{ cid }}" {% if cid == selected_id %}selected{% endif %}>{{ cname }}</option>
+        {% endfor %}
+      </select>
+    </p>
+    <p>
+      <label for="wu-title">Title</label><br>
+      <input type="text" name="title" id="wu-title" size="60" required
+             value="{{ prefill.title if prefill else '' }}">
+    </p>
+    <p>
+      <label for="wu-author">Author (shown publicly)</label><br>
+      <input type="text" name="author" id="wu-author" size="60"
+             value="{{ prefill.author if prefill else default_author }}">
+    </p>
+    <p>
+      <label for="wu-file">Load body from a .md file (optional)</label><br>
+      <input type="file" id="wu-file" accept=".md,text/markdown,text/plain">
+    </p>
+    <p>
+      <textarea name="body" id="wu-body" rows="20" cols="90" required>{{ prefill.body_raw if prefill else '' }}</textarea>
+    </p>
+    <p>
+      Mark flags and spoilers with <code>&lt;!--redact--&gt;…&lt;!--/redact--&gt;</code>
+      or fenced <code>```flag</code> / <code>```spoiler</code> blocks — see the
+      <a href="https://github.com/your-org/CTFd_writeup_plugin/blob/main/ctfd_censored_writeups/docs/writeup-format.md"
+         target="_blank">format docs</a>.<br>
+      Host images externally (imgur, GitHub, &hellip;) and reference them by URL;
+      do not embed base64 images. Images cannot be redacted — never screenshot the flag.
+    </p>
+    <button type="submit" class="btn btn-primary">Submit for review</button>
+  </form>
+  <script>
+    document.getElementById("wu-file").addEventListener("change", function (e) {
+      var f = e.target.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () { document.getElementById("wu-body").value = reader.result; };
+      reader.readAsText(f);
+    });
+  </script>
+  {% endif %}
+</div>
+</body>
+</html>
