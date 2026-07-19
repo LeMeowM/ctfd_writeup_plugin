@@ -16,6 +16,7 @@ This is enforced at the storage layer: the censored and uncensored bodies live i
 - **Challenge modal tab**: a "Writeups" tab appears in the challenge modal (core-beta theme), listing each writeup with a lock icon until solved. Injected client-side; silently absent on other themes.
 - **Sync**: Push a commit to the writeups repo → git host fires `POST /writeups/_webhook` (HMAC-verified) → plugin pulls and re-syncs. Manual sync also available via the admin page or `flask writeups sync`.
 - **Quarantine**: Files that fail to parse, reference an unknown challenge, or contain a flag in their censored body are stored but never served.
+- **Player submissions**: solvers can submit writeups from `/writeups/submit` (structured form + markdown body, `.md` upload supported). Admins review at `/admin/writeups`: side-by-side editor with live censored preview, optional internal score, approve/reject with comment. Approved writeups publish instantly under a `submission://<id>` source key that file sync never touches. Optional Discord webhook announces submissions and decisions (`WRITEUPS_DISCORD_WEBHOOK_URL`).
 
 ## Documentation
 

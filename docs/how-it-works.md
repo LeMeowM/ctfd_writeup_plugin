@@ -154,6 +154,31 @@ The plugin adds a "Writeups" tab to the challenge modal on the challenges page, 
 
 **Theme dependency (fail-silent)**: the injection requires the core-beta modal markup (`#challenge-window`, `.nav-tabs`, `.tab-content`, `#challenge-id`). On a theme where any of these is absent, the script does nothing and the modal renders exactly as stock. The solve gate is unaffected either way: the tab only shows metadata the list API already exposes, and the linked pages enforce censoring server-side.
 
+## Player Submissions
+
+Submissions live in `plugin_writeup_submissions` **in the uncensored bind** —
+an unreviewed body is presumed to contain flags, so it never touches the main
+DB. One live submission per (user, challenge); resubmitting a pending or
+rejected writeup overwrites it and resets review state.
+
+On approval, the plugin composes a frontmatter document (numeric challenge
+ID, title, author + the admin-final body) and runs it through the same
+`parse_writeup_file` → redaction → static-flag-scan pipeline as file sync,
+then upserts `Writeup`/`WriteupUncensored` with `source_key =
+"submission://<id>"`. Approval is **blocked** (not quarantined) while the
+body fails to parse or leaks a static flag — there is a human in the loop to
+fix it. `sync_from_dir`'s deletion pass skips the `submission://` namespace,
+so file sync and submissions coexist.
+
+The admin review page shows the raw body in an editor next to a rendered
+censored preview (the real pipeline output). Admin edits are stored in
+`body_edited`; the submitter's original stays in `body_raw`. An approved
+submission can be re-opened, which unpublishes it and returns it to the
+queue. The `llm_report` column is reserved for a future local-LLM pre-review
+worker (e.g. `flask writeups llm-review` scanning pending submissions and
+writing back `{"verdict", "summary", "suggested_score"}`); nothing writes it
+today.
+
 ## Known Limitations
 
 - **`/writeups` index shows "Challenge #N"**: the index template lists challenge IDs without joining the `Challenges` table to show names. A future improvement would add a name-resolution step.

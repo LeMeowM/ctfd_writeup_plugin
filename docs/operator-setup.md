@@ -106,6 +106,16 @@ When set to `True` (or `"1"`, `"true"`, `"yes"`, `"on"`), all authenticated user
 WRITEUPS_OPEN_AFTER_CTF=true
 ```
 
+### `WRITEUPS_DISCORD_WEBHOOK_URL`
+
+**Default**: `""`
+
+Discord webhook URL for submission/review announcements. Empty disables. Payloads contain titles, challenge names, author, and score only — never writeup bodies or admin comments.
+
+```bash
+WRITEUPS_DISCORD_WEBHOOK_URL=https://discordapp.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
+```
+
 ## Initial Seed
 
 After deploying the plugin and placing writeup files in `WRITEUPS_REPO_PATH`, run the initial sync:

@@ -95,6 +95,23 @@ After inline processing, `verify_no_secret` scans the censored output for any re
 
 A quarantined writeup's censored body is stored in the DB but is never returned to users.
 
+## Images
+
+Host images externally (imgur, GitHub, a repo raw URL, …) and reference them
+by URL:
+
+```markdown
+![exploit output](https://i.imgur.com/example.png)
+```
+
+Do **not** embed base64 `data:` URIs — they bloat the database and count
+against the submission size cap.
+
+**Images cannot be redacted.** The redaction engine works on text only; a
+screenshot that shows the flag leaks it to non-solvers no matter what markers
+surround it. Never screenshot the flag or the final solution output.
+Reviewers check every image during submission review for exactly this reason.
+
 ## Source Key and File Identity
 
 The **source key** is the repo-relative file path (e.g. `web/web101-myapproach.md`). It is the stable primary key for upsert logic:
