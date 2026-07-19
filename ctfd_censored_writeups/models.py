@@ -26,3 +26,38 @@ class WriteupUncensored(db.Model):
 
     writeup_id = db.Column(db.Integer, primary_key=True)  # no cross-bind FK by design
     uncensored_body = db.Column(db.Text, nullable=False, default="")
+
+
+STATUS_PENDING = "pending"
+STATUS_APPROVED = "approved"
+STATUS_REJECTED = "rejected"
+
+
+class WriteupSubmission(db.Model):
+    """Player-submitted writeup awaiting review. Lives in the uncensored bind:
+    an unreviewed body is presumed to contain flags, and the main DB must
+    never hold secrets."""
+    __bind_key__ = "uncensored"
+    __tablename__ = "plugin_writeup_submissions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    challenge_id = db.Column(db.Integer, nullable=False, index=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    account_id = db.Column(db.Integer, nullable=False)
+    title = db.Column(db.Text, nullable=False)
+    author = db.Column(db.Text, nullable=False)
+    body_raw = db.Column(db.Text, nullable=False)
+    body_edited = db.Column(db.Text, nullable=True)   # admin-edited; published body is body_edited or body_raw
+    status = db.Column(db.String(16), nullable=False, default=STATUS_PENDING, index=True)
+    admin_comment = db.Column(db.Text, nullable=True)
+    score = db.Column(db.Integer, nullable=True)      # internal grade, admin-only
+    reviewed_by = db.Column(db.Integer, nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    llm_report = db.Column(db.Text, nullable=True)    # reserved for LLM pre-review JSON
+    writeup_id = db.Column(db.Integer, nullable=True)  # published Writeup row (no cross-bind FK by design)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "challenge_id", name="uq_submission_user_challenge"),
+    )
