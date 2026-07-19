@@ -26,6 +26,32 @@
       document.getElementById("wu-sync-out").textContent = await r.text();
     };
   </script>
+
+  <h3>Submissions</h3>
+  <p>
+    Filter:
+    {% for st in ["pending", "approved", "rejected", "all"] %}
+    <a href="/admin/writeups?status={{ st }}">{{ st }}</a>{% if st == status %} (current){% endif %}{% if not loop.last %} &middot;{% endif %}
+    {% endfor %}
+  </p>
+  {% if not subs %}<p>No {{ status }} submissions.</p>{% endif %}
+  {% if subs %}
+  <table class="table" border="1">
+    <tr><th>Challenge</th><th>Title</th><th>Author</th><th>Submitter</th><th>Submitted</th><th>Status</th><th>Score</th><th></th></tr>
+    {% for s in subs %}
+    <tr>
+      <td>{{ names[s.challenge_id] or ("#" ~ s.challenge_id) }}</td>
+      <td>{{ s.title }}</td>
+      <td>{{ s.author }}</td>
+      <td>{{ submitters[s.user_id] or ("#" ~ s.user_id) }}</td>
+      <td>{{ s.created_at }}</td>
+      <td>{{ s.status }}</td>
+      <td>{{ s.score if s.score is not none else "" }}</td>
+      <td><a href="/admin/writeups/submissions/{{ s.id }}">review</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
 </div>
 </body>
 </html>

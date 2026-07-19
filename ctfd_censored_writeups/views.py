@@ -150,9 +150,18 @@ def register(blueprint):
     @blueprint.route("/admin/writeups", methods=["GET"])
     @admins_only
     def admin_page():
+        from .models import WriteupSubmission
         total = Writeup.query.count()
         quarantined = Writeup.query.filter_by(quarantined=True).count()
-        return render_template("admin_writeups.html", total=total, quarantined=quarantined)
+        status = request.args.get("status", "pending")
+        q = WriteupSubmission.query
+        if status != "all":
+            q = q.filter_by(status=status)
+        subs = q.order_by(WriteupSubmission.created_at.asc()).all()
+        names = {s.challenge_id: compat.challenge_name(s.challenge_id) for s in subs}
+        submitters = {s.user_id: compat.user_name(s.user_id) for s in subs}
+        return render_template("admin_writeups.html", total=total, quarantined=quarantined,
+                               subs=subs, names=names, submitters=submitters, status=status)
 
     @blueprint.route("/admin/writeups/sync", methods=["POST"])
     @admins_only
