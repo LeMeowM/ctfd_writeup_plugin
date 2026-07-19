@@ -271,3 +271,32 @@ def test_decision_fires_reviewed_webhook_without_comment_text(app, make_admin, m
     msg = calls[0]["content"]
     assert "Rejected" in msg and "Hooked Title" in msg and "Hooked" in msg
     assert "SECRETCOMMENT" not in msg
+
+
+def test_reopen_unpublishes_and_resets(app, make_admin, make_user, make_challenge):
+    c = make_challenge()
+    u = make_user()
+    sid = _seed_submission(app, c.id, u.id)
+    client = _admin_client(app, make_admin)
+    assert _decide(client, app, sid, "approve").status_code == 302
+    r = client.post(f"/admin/writeups/submissions/{sid}/reopen",
+                    data={"nonce": _nonce(client)})
+    assert r.status_code == 302
+    with app.app_context():
+        from ctfd_censored_writeups.models import WriteupSubmission, Writeup, WriteupUncensored
+        s = app.db.session.get(WriteupSubmission, sid)
+        assert s.status == "pending"
+        assert s.writeup_id is None
+        assert s.reviewed_by is None and s.reviewed_at is None
+        assert Writeup.query.filter_by(source_key=f"submission://{sid}").first() is None
+        assert WriteupUncensored.query.count() == 0
+
+
+def test_reopen_only_valid_for_approved(app, make_admin, make_user, make_challenge):
+    c = make_challenge()
+    u = make_user()
+    sid = _seed_submission(app, c.id, u.id, status="pending")
+    client = _admin_client(app, make_admin)
+    r = client.post(f"/admin/writeups/submissions/{sid}/reopen",
+                    data={"nonce": _nonce(client)})
+    assert r.status_code == 400

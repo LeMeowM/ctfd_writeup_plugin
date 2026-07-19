@@ -110,3 +110,19 @@ def register(blueprint):
             approved=(sub.status == STATUS_APPROVED), score=sub.score,
         )
         return redirect("/admin/writeups")
+
+    @blueprint.route("/admin/writeups/submissions/<int:sub_id>/reopen", methods=["POST"])
+    @admins_only
+    def reopen(sub_id):
+        sub = db.session.get(WriteupSubmission, sub_id)
+        if sub is None:
+            abort(404)
+        if sub.status != STATUS_APPROVED:
+            abort(400, description="only approved submissions can be re-opened")
+        publish.unpublish_submission(sub)
+        sub.writeup_id = None
+        sub.status = STATUS_PENDING
+        sub.reviewed_by = None
+        sub.reviewed_at = None
+        db.session.commit()
+        return redirect(f"/admin/writeups/submissions/{sub.id}")
