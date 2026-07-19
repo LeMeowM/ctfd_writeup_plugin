@@ -180,3 +180,49 @@ def test_webhook_failure_does_not_break_submit(app, make_user, make_challenge, m
     make_solve(user_id=u.id, challenge_id=c.id)
     client = login_as_user(app, name=u.name, password="pw")
     assert _submit(client, c.id).status_code == 302
+
+
+def test_mine_shows_own_submissions_with_status_and_comment(app, make_user, make_challenge, make_solve):
+    from tests.helpers import login_as_user
+    c = make_challenge(name="Mine Chal")
+    u = make_user()
+    make_solve(user_id=u.id, challenge_id=c.id)
+    client = login_as_user(app, name=u.name, password="pw")
+    assert _submit(client, c.id, title="Mine Title").status_code == 302
+    with app.app_context():
+        from ctfd_censored_writeups.models import WriteupSubmission, STATUS_REJECTED
+        s = WriteupSubmission.query.one()
+        s.status = STATUS_REJECTED
+        s.admin_comment = "needs more detail"
+        s.score = 3
+        app.db.session.commit()
+    r = client.get("/writeups/mine")
+    assert r.status_code == 200
+    assert b"Mine Title" in r.data
+    assert b"Mine Chal" in r.data
+    assert b"rejected" in r.data
+    assert b"needs more detail" in r.data
+    assert b">3<" not in r.data  # score is internal, never shown to submitters
+
+
+def test_mine_does_not_show_other_users_submissions(app, make_user, make_challenge, make_solve):
+    from tests.helpers import login_as_user
+    c = make_challenge()
+    u1 = make_user(name="alice", email="a@x.io")
+    u2 = make_user(name="bob", email="b@x.io")
+    make_solve(user_id=u1.id, challenge_id=c.id)
+    client1 = login_as_user(app, name="alice", password="pw")
+    assert _submit(client1, c.id, title="AliceOnly").status_code == 302
+    client2 = login_as_user(app, name="bob", password="pw")
+    r = client2.get("/writeups/mine")
+    assert r.status_code == 200
+    assert b"AliceOnly" not in r.data
+
+
+def test_index_links_to_submit_and_mine(app, make_user):
+    from tests.helpers import login_as_user
+    u = make_user()
+    client = login_as_user(app, name=u.name, password="pw")
+    r = client.get("/writeups")
+    assert b"/writeups/submit" in r.data
+    assert b"/writeups/mine" in r.data

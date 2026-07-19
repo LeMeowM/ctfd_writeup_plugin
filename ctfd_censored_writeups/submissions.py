@@ -93,3 +93,15 @@ def register(blueprint):
             compat.challenge_name(challenge_id) or f"#{challenge_id}", author,
         )
         return redirect("/writeups/mine")
+
+    @blueprint.route("/writeups/mine")
+    @authed_only
+    def my_submissions():
+        user = compat.current_user()
+        subs = (
+            WriteupSubmission.query.filter_by(user_id=user.id)
+            .order_by(WriteupSubmission.updated_at.desc())
+            .all()
+        )
+        names = {s.challenge_id: compat.challenge_name(s.challenge_id) for s in subs}
+        return render_template("my_submissions.html", subs=subs, names=names)

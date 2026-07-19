@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Writeup Submissions</title>
+</head>
+<body>
+<div class="container">
+  <h2>My Writeup Submissions</h2>
+  <p><a href="/writeups/submit">Submit a writeup</a> &middot; <a href="/writeups">All writeups</a></p>
+  {% if not subs %}<p>No submissions yet.</p>{% endif %}
+  <table class="table">
+    {% if subs %}
+    <tr><th>Challenge</th><th>Title</th><th>Status</th><th>Reviewer comment</th><th></th></tr>
+    {% endif %}
+    {% for s in subs %}
+    <tr>
+      <td>{{ names[s.challenge_id] or ("#" ~ s.challenge_id) }}</td>
+      <td>{{ s.title }}</td>
+      <td>{{ s.status }}</td>
+      <td>{% if s.status == "rejected" %}{{ s.admin_comment or "" }}{% endif %}</td>
+      <td>
+        {% if s.status == "approved" and s.writeup_id %}
+        <a href="/writeups/{{ s.challenge_id }}/{{ s.writeup_id }}">view</a>
+        {% else %}
+        <a href="/writeups/submit?challenge_id={{ s.challenge_id }}">edit &amp; resubmit</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+</body>
+</html>

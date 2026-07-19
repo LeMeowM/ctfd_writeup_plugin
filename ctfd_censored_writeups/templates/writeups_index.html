@@ -8,6 +8,10 @@
 <body>
 <div class="container">
   <h2>Writeups</h2>
+  <p>
+    <a href="/writeups/submit">Submit a writeup</a> &middot;
+    <a href="/writeups/mine">My submissions</a>
+  </p>
   {% if not challenge_ids %}<p>No writeups available yet.</p>{% endif %}
   <ul class="list-group">
     {% for cid in challenge_ids %}
