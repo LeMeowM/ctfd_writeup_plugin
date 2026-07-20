@@ -20,14 +20,19 @@ After placing the plugin, restart CTFd. On first boot the plugin calls `app.db.c
 
 ### Development / test setup
 
-CTFd 3.7.6 is not available on PyPI as a wheel. This repository's development environment keeps a CTFd source clone at `.ctfd-src/` (added to `sys.path` by `pytest.ini`). To run the test suite:
+CTFd 3.7.6 is not available on PyPI as a wheel (it ships no `setup.py`/`pyproject.toml`, so it can't be `pip install`ed as a package). This repository's development environment instead keeps a CTFd source clone at `.ctfd-src/`, put on `sys.path` via a `ctfd.pth` file in the venv.
+
+Run the one-time setup script, which clones CTFd, creates `.venv`, installs dependencies, wires up `ctfd.pth`, symlinks the plugin into CTFd's `plugins/` dir, and seeds a local instance (admin/player accounts, sample challenges, sample writeups):
 
 ```bash
-# Clone CTFd alongside this repo (one-time setup):
-git clone https://github.com/CTFd/CTFd .ctfd-src
-cd .ctfd-src && git checkout 3.7.6 && cd ..
+.dev/setup.sh
+```
 
-python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+It's idempotent — safe to re-run any time (e.g. after deleting `.venv` or `.ctfd-src`). Once it's run, `.dev/run.sh` starts the seeded local instance directly (and calls `.dev/setup.sh` itself automatically if `.venv`/`.ctfd-src` are missing, so a fresh clone can just run `.dev/run.sh`).
+
+To run the test suite after setup:
+
+```bash
 .venv/bin/pytest -q
 ```
 

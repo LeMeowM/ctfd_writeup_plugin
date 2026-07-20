@@ -1,4 +1,7 @@
 -r requirements.txt
-# CTFd from git: requires git + network; local dev env clones to .ctfd-src/ (gitignored) via ctfd.pth
-CTFd @ git+https://github.com/CTFd/CTFd.git@3.7.6
+# CTFd 3.7.6 ships no setup.py/pyproject.toml, so it cannot be pip-installed
+# as a package (a `CTFd @ git+...` line here would fail to build). The dev
+# environment instead clones CTFd's source to .ctfd-src/ (gitignored) and
+# installs its pinned requirements.txt directly, wiring it onto sys.path via
+# a ctfd.pth file. See .dev/setup.sh, which does this for you.
 pytest>=8.0
