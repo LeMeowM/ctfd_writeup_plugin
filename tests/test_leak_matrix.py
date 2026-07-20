@@ -235,3 +235,28 @@ def test_team_mode_teammate_solve_unlocks_uncensored(app_teams, tmp_path):
 
     client_c = login_as_user(app_teams, name=loner_name, password="pw")
     _assert_no_secret(client_c.get(f"/writeups/{chal_id}/{wid}"))
+
+
+def test_solved_challenges_team_mode(app_teams):
+    """solved_challenges keys off team_id in team mode (mirrors has_solved's
+    column choice via the shared _solve_account_column helper)."""
+    from tests.helpers import gen_user, gen_challenge, gen_solve
+    from CTFd.models import db, Teams
+    from ctfd_censored_writeups import compat
+
+    with app_teams.app_context():
+        team = Teams(name="tsc", email="tsc@x.io", password="pw")
+        db.session.add(team)
+        db.session.flush()
+        user = gen_user(db, name="tsc_u", email="tscu@x.io", password="pw", team_id=team.id)
+        team.captain_id = user.id
+        chal = gen_challenge(db, name="TSC_chal")
+        db.session.commit()
+        cid, tid, uid = chal.id, team.id, user.id
+
+    with app_teams.app_context():
+        gen_solve(db, user_id=uid, challenge_id=cid, team_id=tid)
+
+    with app_teams.app_context():
+        assert compat.solved_challenges(tid) == [(cid, "TSC_chal")]
+        assert compat.solved_challenges(tid + 999) == []  # a different team sees nothing

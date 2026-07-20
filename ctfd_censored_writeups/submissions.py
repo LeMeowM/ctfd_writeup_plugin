@@ -76,6 +76,7 @@ def register(blueprint):
             sub = WriteupSubmission(user_id=user.id, challenge_id=challenge_id,
                                     account_id=account_id)
             db.session.add(sub)
+        sub.account_id = account_id  # refresh in case team membership changed since a prior submit
         sub.title = title
         sub.author = author
         sub.body_raw = body
@@ -108,5 +109,5 @@ def register(blueprint):
             .order_by(WriteupSubmission.updated_at.desc())
             .all()
         )
-        names = {s.challenge_id: compat.challenge_name(s.challenge_id) for s in subs}
+        names = compat.challenge_names([s.challenge_id for s in subs])
         return render_template("my_submissions.html", subs=subs, names=names)

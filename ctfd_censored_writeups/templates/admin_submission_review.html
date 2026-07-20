@@ -24,7 +24,7 @@
   <pre>{{ sub.llm_report }}</pre>
   {% endif %}
 
-  {% if sub.status == "approved" %}
+  {% if sub.is_approved %}
   <p>This submission is published as writeup #{{ sub.writeup_id }}
      (<a href="/writeups/{{ sub.challenge_id }}/{{ sub.writeup_id }}">view</a>).</p>
   <form method="POST" action="/admin/writeups/submissions/{{ sub.id }}/reopen">

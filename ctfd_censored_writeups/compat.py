@@ -35,15 +35,19 @@ def account_id_for(user):
     return user.account_id
 
 
+def _solve_account_column():
+    """The Solves column that holds the account id for the current mode.
+
+    Solves.account_id is a hybrid_property with no SQL expression clause, so it
+    cannot be used in a WHERE; we filter on team_id in team mode, user_id
+    otherwise. Single source of truth for both has_solved and solved_challenges."""
+    return Solves.team_id if is_teams_mode() else Solves.user_id
+
+
 def has_solved(account_id, challenge_id) -> bool:
     if account_id is None:
         return False
-    # Solves.account_id has no SQL expression clause, so filter on the actual
-    # column that holds the account id for the current mode.
-    if is_teams_mode():
-        col = Solves.team_id
-    else:
-        col = Solves.user_id
+    col = _solve_account_column()
     return (
         db.session.query(Solves.id)
         .filter(col == account_id, Solves.challenge_id == challenge_id)
@@ -102,15 +106,11 @@ def static_flag_values(challenge_id) -> list:
     return [f.content for f in rows if getattr(f, "content", None)]
 
 
-def solved_challenges(account_id):
-    """(id, name) of challenges solved by the account, name-sorted.
-
-    Same mode-aware column choice as has_solved: Solves.team_id in team mode,
-    Solves.user_id in user mode (Solves.account_id has no SQL expression).
-    """
+def solved_challenges(account_id) -> list[tuple[int, str]]:
+    """(id, name) of challenges solved by the account, name-sorted."""
     if account_id is None:
         return []
-    col = Solves.team_id if is_teams_mode() else Solves.user_id
+    col = _solve_account_column()
     rows = (
         db.session.query(Challenges.id, Challenges.name)
         .join(Solves, Solves.challenge_id == Challenges.id)
@@ -121,12 +121,32 @@ def solved_challenges(account_id):
     return [(r[0], r[1]) for r in rows]
 
 
-def challenge_name(challenge_id):
+def challenge_name(challenge_id) -> str | None:
     row = db.session.query(Challenges.name).filter(Challenges.id == challenge_id).first()
     return row[0] if row else None
 
 
-def user_name(user_id):
+def challenge_names(challenge_ids) -> dict:
+    """Map {id: name} for the given challenge ids in one query (missing ids
+    are simply absent). Batched form of challenge_name for list views."""
+    ids = {cid for cid in challenge_ids if cid is not None}
+    if not ids:
+        return {}
+    rows = db.session.query(Challenges.id, Challenges.name).filter(Challenges.id.in_(ids)).all()
+    return {r[0]: r[1] for r in rows}
+
+
+def user_name(user_id) -> str | None:
     from CTFd.models import Users
     u = db.session.get(Users, user_id)
     return u.name if u else None
+
+
+def user_names(user_ids) -> dict:
+    """Map {id: name} for the given user ids in one query. Batched user_name."""
+    from CTFd.models import Users
+    ids = {uid for uid in user_ids if uid is not None}
+    if not ids:
+        return {}
+    rows = db.session.query(Users.id, Users.name).filter(Users.id.in_(ids)).all()
+    return {r[0]: r[1] for r in rows}

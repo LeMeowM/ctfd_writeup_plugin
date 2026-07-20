@@ -166,6 +166,27 @@ def test_submit_fires_webhook_without_body_text(app, make_user, make_challenge, 
     assert "SECRETBODY" not in msg and "FLAG{x}" not in msg
 
 
+def test_resubmit_also_fires_webhook(app, make_user, make_challenge, make_solve, monkeypatch):
+    """A resubmission re-enters the review queue, so admins must be pinged again."""
+    from tests.helpers import login_as_user
+    calls = []
+
+    def fake_post(url, json=None, timeout=None):
+        calls.append(json)
+
+    from ctfd_censored_writeups import notify
+    monkeypatch.setattr(notify.requests, "post", fake_post)
+    monkeypatch.setenv("WRITEUPS_DISCORD_WEBHOOK_URL", "https://discord.test/hook")
+    c = make_challenge(name="ReWebby")
+    u = make_user()
+    make_solve(user_id=u.id, challenge_id=c.id)
+    client = login_as_user(app, name=u.name, password="pw")
+    assert _submit(client, c.id, title="v1").status_code == 302
+    assert _submit(client, c.id, title="v2 revised").status_code == 302
+    assert len(calls) == 2                       # both the initial and the resubmit ping
+    assert "v2 revised" in calls[1]["content"]
+
+
 def test_webhook_failure_does_not_break_submit(app, make_user, make_challenge, make_solve, monkeypatch):
     from tests.helpers import login_as_user
 
@@ -194,7 +215,7 @@ def test_mine_shows_own_submissions_with_status_and_comment(app, make_user, make
         s = WriteupSubmission.query.one()
         s.status = STATUS_REJECTED
         s.admin_comment = "needs more detail"
-        s.score = 3
+        s.score = 7777  # distinctive so a substring check is meaningful
         app.db.session.commit()
     r = client.get("/writeups/mine")
     assert r.status_code == 200
@@ -202,14 +223,30 @@ def test_mine_shows_own_submissions_with_status_and_comment(app, make_user, make
     assert b"Mine Chal" in r.data
     assert b"rejected" in r.data
     assert b"needs more detail" in r.data
-    assert b">3<" not in r.data  # score is internal, never shown to submitters
+    assert b"7777" not in r.data          # score is internal, never shown to submitters
+    assert b"Score" not in r.data         # not even a score column/label
+    # a rejected submission offers edit & resubmit, not a view link
+    assert b"edit &amp; resubmit" in r.data
+
+
+def test_mine_pending_submission_shows_resubmit_link(app, make_user, make_challenge, make_solve):
+    from tests.helpers import login_as_user
+    c = make_challenge(name="Pend Chal")
+    u = make_user()
+    make_solve(user_id=u.id, challenge_id=c.id)
+    client = login_as_user(app, name=u.name, password="pw")
+    assert _submit(client, c.id, title="Pending Title").status_code == 302  # stays pending
+    r = client.get("/writeups/mine")
+    assert r.status_code == 200
+    assert b"pending" in r.data
+    assert b"edit &amp; resubmit" in r.data  # pending offers resubmit, not a view link
 
 
 def test_mine_does_not_show_other_users_submissions(app, make_user, make_challenge, make_solve):
     from tests.helpers import login_as_user
     c = make_challenge()
     u1 = make_user(name="alice", email="a@x.io")
-    u2 = make_user(name="bob", email="b@x.io")
+    make_user(name="bob", email="b@x.io")
     make_solve(user_id=u1.id, challenge_id=c.id)
     client1 = login_as_user(app, name="alice", password="pw")
     assert _submit(client1, c.id, title="AliceOnly").status_code == 302

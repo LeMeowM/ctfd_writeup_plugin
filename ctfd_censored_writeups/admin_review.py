@@ -82,7 +82,7 @@ def register(blueprint):
         sub.body_edited = body if body != sub.body_raw else None
 
         if action == "approve":
-            ev = publish.evaluate(sub.challenge_id, sub.body_edited or sub.body_raw)
+            ev = publish.evaluate(sub.challenge_id, sub.published_body)
             if ev.warnings:
                 # Blocked, not quarantined: a human is in the loop to fix it.
                 db.session.rollback()

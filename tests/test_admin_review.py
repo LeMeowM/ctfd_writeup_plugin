@@ -25,7 +25,7 @@ def test_queue_defaults_to_pending(app, make_admin, make_user, make_challenge):
     c = make_challenge(name="Queue Chal")
     u = make_user()
     _seed_submission(app, c.id, u.id, title="PendingOne", status="pending")
-    _seed_submission_id2 = _seed_submission(app, c.id, u.id + 1000, title="DoneOne", status="approved")
+    _seed_submission(app, c.id, u.id + 1000, title="DoneOne", status="approved")
     client = _admin_client(app, make_admin)
     r = client.get("/admin/writeups")
     assert r.status_code == 200
@@ -300,3 +300,58 @@ def test_reopen_only_valid_for_approved(app, make_admin, make_user, make_challen
     r = client.post(f"/admin/writeups/submissions/{sid}/reopen",
                     data={"nonce": _nonce(client)})
     assert r.status_code == 400
+
+
+def test_reopen_unknown_submission_404(app, make_admin):
+    client = _admin_client(app, make_admin)
+    r = client.post("/admin/writeups/submissions/99999/reopen",
+                    data={"nonce": _nonce(client)})
+    assert r.status_code == 404
+
+
+def test_reopen_requires_admin(app, make_user, make_challenge):
+    from tests.helpers import login_as_user
+    c = make_challenge()
+    u = make_user()
+    sid = _seed_submission(app, c.id, u.id, status="approved")
+    client = login_as_user(app, name=u.name, password="pw")
+    r = client.post(f"/admin/writeups/submissions/{sid}/reopen",
+                    data={"nonce": _nonce(client)}, follow_redirects=False)
+    assert r.status_code in (302, 403)  # CTFd admins_only redirects non-admins
+
+
+def test_approve_with_blanked_body_publishes_empty_not_raw(app, make_admin, make_user, make_challenge):
+    """An admin who clears the body publishes the empty edit — not a silent
+    fallback to the submitter's raw body (which may hold the spoiler they removed)."""
+    c = make_challenge()
+    u = make_user()
+    sid = _seed_submission(app, c.id, u.id, body="ORIGINALSECRET should not survive a blank edit")
+    client = _admin_client(app, make_admin)
+    r = _decide(client, app, sid, "approve", body="")
+    assert r.status_code == 302
+    with app.app_context():
+        from ctfd_censored_writeups.models import WriteupSubmission, Writeup, WriteupUncensored
+        s = app.db.session.get(WriteupSubmission, sid)
+        assert s.body_edited == ""            # the blank edit was recorded, not discarded
+        w = Writeup.query.filter_by(source_key=f"submission://{sid}").one()
+        assert "ORIGINALSECRET" not in w.censored_body
+        u_body = WriteupUncensored.query.filter_by(writeup_id=w.id).one().uncensored_body
+        assert "ORIGINALSECRET" not in u_body
+
+
+def test_admin_queue_paginates(app, make_admin, make_challenge):
+    from ctfd_censored_writeups.models import WriteupSubmission
+    c = make_challenge()
+    with app.app_context():
+        for i in range(55):
+            app.db.session.add(WriteupSubmission(
+                challenge_id=c.id, user_id=1000 + i, account_id=1000 + i,
+                title=f"S{i}", author="a", body_raw="b", status="pending"))
+        app.db.session.commit()
+    client = _admin_client(app, make_admin)
+    r1 = client.get("/admin/writeups?status=pending")
+    assert r1.data.count(b"/admin/writeups/submissions/") == 50  # page size
+    assert b"next" in r1.data
+    r2 = client.get("/admin/writeups?status=pending&page=2")
+    assert r2.data.count(b"/admin/writeups/submissions/") == 5   # remainder
+    assert b"prev" in r2.data

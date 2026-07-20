@@ -47,7 +47,7 @@ class WriteupSubmission(db.Model):
     title = db.Column(db.Text, nullable=False)
     author = db.Column(db.Text, nullable=False)
     body_raw = db.Column(db.Text, nullable=False)
-    body_edited = db.Column(db.Text, nullable=True)   # admin-edited; published body is body_edited or body_raw
+    body_edited = db.Column(db.Text, nullable=True)   # admin-edited; published body is published_body (edit if not None, else raw)
     status = db.Column(db.String(16), nullable=False, default=STATUS_PENDING, index=True)
     admin_comment = db.Column(db.Text, nullable=True)
     score = db.Column(db.Integer, nullable=True)      # internal grade, admin-only
@@ -61,3 +61,23 @@ class WriteupSubmission(db.Model):
     __table_args__ = (
         db.UniqueConstraint("user_id", "challenge_id", name="uq_submission_user_challenge"),
     )
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == STATUS_PENDING
+
+    @property
+    def is_approved(self) -> bool:
+        return self.status == STATUS_APPROVED
+
+    @property
+    def is_rejected(self) -> bool:
+        return self.status == STATUS_REJECTED
+
+    @property
+    def published_body(self) -> str:
+        """Body to publish/preview: the admin edit if one was made, otherwise
+        the submitter's original. An edit to an empty string is a real edit
+        (distinct from 'not edited' = None) and is respected — falling back to
+        body_raw there would silently republish content the admin removed."""
+        return self.body_edited if self.body_edited is not None else self.body_raw

@@ -47,7 +47,7 @@ def censored_body_leaks_flag(challenge_id, censored_body) -> bool:
 @dataclass
 class Evaluation:
     parsed: ParsedWriteup
-    warnings: list = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 def evaluate(challenge_id: int, body: str) -> Evaluation:
@@ -75,7 +75,7 @@ def publish_submission(sub):
     from CTFd.models import db
     from .models import Writeup, WriteupUncensored
 
-    body = sub.body_edited or sub.body_raw
+    body = sub.published_body
     key = source_key_for(sub.id)
     parsed = parse_writeup_file(compose_document(sub.challenge_id, sub.title, sub.author, body), key)
 

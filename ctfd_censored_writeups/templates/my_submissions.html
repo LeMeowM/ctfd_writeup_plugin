@@ -19,9 +19,9 @@
       <td>{{ names[s.challenge_id] or ("#" ~ s.challenge_id) }}</td>
       <td>{{ s.title }}</td>
       <td>{{ s.status }}</td>
-      <td>{% if s.status == "rejected" %}{{ s.admin_comment or "" }}{% endif %}</td>
+      <td>{% if s.is_rejected %}{{ s.admin_comment or "" }}{% endif %}</td>
       <td>
-        {% if s.status == "approved" and s.writeup_id %}
+        {% if s.is_approved and s.writeup_id %}
         <a href="/writeups/{{ s.challenge_id }}/{{ s.writeup_id }}">view</a>
         {% else %}
         <a href="/writeups/submit?challenge_id={{ s.challenge_id }}">edit &amp; resubmit</a>

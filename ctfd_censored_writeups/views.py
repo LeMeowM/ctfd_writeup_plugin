@@ -5,8 +5,10 @@ from flask import abort, current_app, jsonify, render_template, request
 from CTFd.plugins import bypass_csrf_protection
 from CTFd.utils.decorators import admins_only, authed_only
 from .render import render_markdown
-from .models import Writeup, WriteupUncensored
+from .models import Writeup, WriteupUncensored, WriteupSubmission
 from . import compat, gate
+
+ADMIN_QUEUE_PAGE_SIZE = 50
 
 
 def _render_body(writeup):
@@ -150,18 +152,29 @@ def register(blueprint):
     @blueprint.route("/admin/writeups", methods=["GET"])
     @admins_only
     def admin_page():
-        from .models import WriteupSubmission
         total = Writeup.query.count()
         quarantined = Writeup.query.filter_by(quarantined=True).count()
         status = request.args.get("status", "pending")
+        page = request.args.get("page", 1, type=int)
+        if page < 1:
+            page = 1
         q = WriteupSubmission.query
         if status != "all":
             q = q.filter_by(status=status)
-        subs = q.order_by(WriteupSubmission.created_at.asc()).all()
-        names = {s.challenge_id: compat.challenge_name(s.challenge_id) for s in subs}
-        submitters = {s.user_id: compat.user_name(s.user_id) for s in subs}
-        return render_template("admin_writeups.html", total=total, quarantined=quarantined,
-                               subs=subs, names=names, submitters=submitters, status=status)
+        sub_total = q.count()
+        subs = (
+            q.order_by(WriteupSubmission.created_at.asc())
+            .limit(ADMIN_QUEUE_PAGE_SIZE)
+            .offset((page - 1) * ADMIN_QUEUE_PAGE_SIZE)
+            .all()
+        )
+        names = compat.challenge_names([s.challenge_id for s in subs])
+        submitters = compat.user_names([s.user_id for s in subs])
+        return render_template(
+            "admin_writeups.html", total=total, quarantined=quarantined,
+            subs=subs, names=names, submitters=submitters, status=status,
+            page=page, has_prev=page > 1, has_next=page * ADMIN_QUEUE_PAGE_SIZE < sub_total,
+        )
 
     @blueprint.route("/admin/writeups/sync", methods=["POST"])
     @admins_only

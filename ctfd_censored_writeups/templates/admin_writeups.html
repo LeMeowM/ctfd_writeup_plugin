@@ -51,6 +51,13 @@
     </tr>
     {% endfor %}
   </table>
+  {% if has_prev or has_next %}
+  <p>
+    {% if has_prev %}<a href="/admin/writeups?status={{ status }}&amp;page={{ page - 1 }}">&larr; prev</a>{% endif %}
+    <span>page {{ page }}</span>
+    {% if has_next %}<a href="/admin/writeups?status={{ status }}&amp;page={{ page + 1 }}">next &rarr;</a>{% endif %}
+  </p>
+  {% endif %}
   {% endif %}
 </div>
 </body>

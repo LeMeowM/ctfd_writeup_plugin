@@ -48,3 +48,21 @@ def test_challenge_and_user_name_lookups(app, make_user, make_challenge):
         assert compat.challenge_name(99999) is None
         assert compat.user_name(u.id) == u.name
         assert compat.user_name(99999) is None
+
+
+def test_challenge_names_batch(app, make_challenge):
+    a = make_challenge(name="Aaa")
+    b = make_challenge(name="Bbb")
+    with app.app_context():
+        got = compat.challenge_names([a.id, b.id, 99999])
+        assert got == {a.id: "Aaa", b.id: "Bbb"}  # missing id simply absent
+        assert compat.challenge_names([]) == {}
+
+
+def test_user_names_batch(app, make_user):
+    u1 = make_user(name="alice", email="a@x.io")
+    u2 = make_user(name="bob", email="b@x.io")
+    with app.app_context():
+        got = compat.user_names([u1.id, u2.id, 99999])
+        assert got == {u1.id: "alice", u2.id: "bob"}
+        assert compat.user_names([]) == {}

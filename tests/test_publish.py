@@ -21,6 +21,18 @@ def test_compose_document_handles_tricky_yaml_title(app):
     assert p.author is None
 
 
+def test_compose_document_title_with_frontmatter_delimiter(app):
+    """A title containing a literal '\\n---\\n' must not break the frontmatter
+    splitter or bleed into the body (yaml.safe_dump escapes/quotes it)."""
+    from ctfd_censored_writeups.publish import compose_document
+    from ctfd_censored_writeups.parser import parse_writeup_file
+    doc = compose_document(7, "before\n---\nafter", None, "REALBODY")
+    p = parse_writeup_file(doc, "k")
+    assert p.ok
+    assert p.title == "before\n---\nafter"
+    assert p.uncensored_body.strip() == "REALBODY"
+
+
 def test_evaluate_clean_body_has_no_warnings(app, make_challenge):
     from ctfd_censored_writeups.publish import evaluate
     c = make_challenge()
