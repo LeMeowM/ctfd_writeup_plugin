@@ -7,6 +7,7 @@ showed: the challenge must exist, be visible, and be solved by the account.
 from flask import abort, current_app, redirect, render_template, request, session
 from CTFd.models import db
 from CTFd.utils.decorators import authed_only
+from sqlalchemy.exc import IntegrityError
 
 from .models import WriteupSubmission, STATUS_PENDING, STATUS_APPROVED
 from . import compat, notify
@@ -86,7 +87,11 @@ def register(blueprint):
         sub.reviewed_by = None
         sub.reviewed_at = None
         sub.llm_report = None
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            abort(409, description="a submission for this challenge already exists")
 
         notify.notify_submitted(
             current_app, title,

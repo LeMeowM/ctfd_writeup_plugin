@@ -226,3 +226,32 @@ def test_index_links_to_submit_and_mine(app, make_user):
     r = client.get("/writeups")
     assert b"/writeups/submit" in r.data
     assert b"/writeups/mine" in r.data
+
+
+def test_concurrent_first_submit_returns_409_not_500(app, make_user, make_challenge, make_solve, monkeypatch):
+    """Two near-simultaneous first submissions for the same (user, challenge)
+    race on the unique constraint; the loser's commit raises IntegrityError.
+    That must surface as a clean 409, not an unhandled 500."""
+    from tests.helpers import login_as_user
+    from sqlalchemy.exc import IntegrityError
+    from ctfd_censored_writeups.models import db
+
+    c = make_challenge()
+    u = make_user()
+    make_solve(user_id=u.id, challenge_id=c.id)
+    client = login_as_user(app, name=u.name, password="pw")
+
+    real_commit = db.session.commit
+    calls = {"n": 0}
+
+    def flaky_commit():
+        calls["n"] += 1
+        # Call #1 is CTFd's own per-request IP-tracking commit (before_request
+        # hook); call #2 is the plugin's submission insert this test targets.
+        if calls["n"] == 2:
+            raise IntegrityError("INSERT", {}, Exception("UNIQUE constraint failed"))
+        return real_commit()
+
+    monkeypatch.setattr(db.session, "commit", flaky_commit)
+    r = _submit(client, c.id, body="racing submission")
+    assert r.status_code == 409
