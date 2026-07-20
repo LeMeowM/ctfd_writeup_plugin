@@ -4,7 +4,7 @@ import hmac
 from flask import abort, current_app, jsonify, render_template, request
 from CTFd.plugins import bypass_csrf_protection
 from CTFd.utils.decorators import admins_only, authed_only
-from CTFd.utils import markdown
+from .render import render_markdown
 from .models import Writeup, WriteupUncensored
 from . import compat, gate
 
@@ -19,7 +19,7 @@ def _render_body(writeup):
     else:
         body = writeup.censored_body
         unlocked = False
-    return markdown(body), unlocked
+    return render_markdown(body), unlocked
 
 
 def register(blueprint):

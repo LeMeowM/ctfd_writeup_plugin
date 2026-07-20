@@ -8,9 +8,9 @@ from datetime import datetime, timezone
 
 from flask import abort, current_app, jsonify, redirect, render_template, request, session
 from CTFd.models import db
-from CTFd.utils import markdown
 from CTFd.utils.decorators import admins_only
 
+from .render import render_markdown
 from .models import (
     WriteupSubmission,
     STATUS_PENDING,
@@ -26,7 +26,7 @@ def _render_review(sub, body, status_code=200):
         "admin_submission_review.html",
         sub=sub,
         body=body,
-        preview_html=markdown(ev.parsed.censored_body),
+        preview_html=render_markdown(ev.parsed.censored_body),
         warnings=ev.warnings,
         challenge_name=compat.challenge_name(sub.challenge_id) or f"#{sub.challenge_id}",
         submitter_name=compat.user_name(sub.user_id) or f"#{sub.user_id}",
@@ -53,7 +53,7 @@ def register(blueprint):
         ev = publish.evaluate(sub.challenge_id, request.form.get("body") or "")
         return jsonify({
             "success": True,
-            "html": markdown(ev.parsed.censored_body),
+            "html": render_markdown(ev.parsed.censored_body),
             "warnings": ev.warnings,
         })
 
